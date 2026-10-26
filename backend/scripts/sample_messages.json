@@ -1,0 +1,66 @@
+[
+  {
+    "msg_id": "m001",
+    "group_id": "g_class_2023",
+    "sender": "班长",
+    "sender_id": "u1001",
+    "send_time": "2026-10-20 09:12:00",
+    "content": "这周六团建，下午6点在南门集合，一起吃饭唱歌，大家把周六晚上的时间空出来"
+  },
+  {
+    "msg_id": "m002",
+    "group_id": "g_class_2023",
+    "sender": "班长",
+    "sender_id": "u1001",
+    "send_time": "2026-10-22 20:35:00",
+    "content": "团建改到周日上午10点了，还是南门集合，之前说周六的同学注意一下"
+  },
+  {
+    "msg_id": "m003",
+    "group_id": "g_class_2023",
+    "sender": "李明",
+    "sender_id": "u1002",
+    "send_time": "2026-10-25 21:40:00",
+    "content": "昨天火锅局的照片我传到群文件了，名字叫火锅局合照.zip，大家自己下载"
+  },
+  {
+    "msg_id": "m004",
+    "group_id": "g_class_2023",
+    "sender": "学习委员",
+    "sender_id": "u1003",
+    "send_time": "2026-10-23 14:05:00",
+    "content": "高数作业周五晚上8点前交，记得把作业私发给我一下，不要发群里"
+  },
+  {
+    "msg_id": "m005",
+    "group_id": "g_class_2023",
+    "sender": "生活委员",
+    "sender_id": "u1004",
+    "send_time": "2026-10-24 11:30:00",
+    "content": "班费每人100元，这周日之前转给我，备注写清姓名学号"
+  },
+  {
+    "msg_id": "m006",
+    "group_id": "g_class_2023",
+    "sender": "王芳",
+    "sender_id": "u1005",
+    "send_time": "2026-10-25 08:20:00",
+    "content": "图书馆今天人好多，有没有人一起去占座"
+  },
+  {
+    "msg_id": "m007",
+    "group_id": "g_class_2023",
+    "sender": "班长",
+    "sender_id": "u1001",
+    "send_time": "2026-10-26 09:40:00",
+    "content": "团建结束了，大家都到了，感谢配合"
+  },
+  {
+    "msg_id": "m008",
+    "group_id": "g_class_2023",
+    "sender": "李明",
+    "sender_id": "u1002",
+    "send_time": "2026-10-21 19:00:00",
+    "content": "上次说的院运会报名表在群文件里，叫院运会报名表.xlsx，截止到本周五"
+  }
+]
