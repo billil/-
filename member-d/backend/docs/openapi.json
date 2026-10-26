@@ -1,0 +1,1253 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "群忆独立后端原型",
+    "version": "0.1.0",
+    "description": "未认证 WorkBuddy 联名版；真实外部模型未实测。详见 API.md。"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "健康检查",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "summary": "能力与模拟模式标识",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        }
+      }
+    },
+    "/v1/imports": {
+      "post": {
+        "summary": "导入文本",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "messages"
+                ],
+                "properties": {
+                  "messages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "$ref": "#/components/schemas/MessageInput"
+                    }
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/messages": {
+      "get": {
+        "summary": "消息列表",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ]
+      }
+    },
+    "/v1/messages/{id}": {
+      "get": {
+        "summary": "消息详情",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "修订并更新索引；清理派生会话",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  },
+                  "group_label": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "sent_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "ISO date or timezone-aware datetime"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "event_key": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "fields": {
+                        "type": "object",
+                        "maxProperties": 20,
+                        "additionalProperties": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "revision_kind": {
+                        "enum": [
+                          "initial",
+                          "correction",
+                          "cancellation"
+                        ]
+                      },
+                      "supersedes": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "source_confirmed": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                },
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "删除原文与索引；清理派生会话",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/coverage": {
+      "get": {
+        "summary": "覆盖统计",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        }
+      }
+    },
+    "/v1/index/rebuild": {
+      "post": {
+        "summary": "重建当前空间索引",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "summary": "人工标注事件与更正证据",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        }
+      }
+    },
+    "/v1/query": {
+      "post": {
+        "summary": "查询或继续会话",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "answer",
+                        "clarify",
+                        "not_found",
+                        "uncertain",
+                        "error"
+                      ]
+                    },
+                    "session_id": {
+                      "type": "string"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    },
+                    "conditions": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "query_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "event_key": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "group_label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sent_after": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sent_before": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "condition_version": {
+                      "type": "integer"
+                    },
+                    "answer": {
+                      "type": "string"
+                    },
+                    "question": {
+                      "type": "string"
+                    },
+                    "fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "value",
+                          "message_id",
+                          "quote"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          },
+                          "message_id": {
+                            "type": "string"
+                          },
+                          "quote": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "citations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "coverage": {
+                      "type": "object"
+                    },
+                    "ai": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "enum": [
+                            "mock",
+                            "live"
+                          ]
+                        },
+                        "simulation": {
+                          "type": "boolean"
+                        },
+                        "attempted": {
+                          "type": "boolean"
+                        },
+                        "actual_participation": {
+                          "type": "boolean"
+                        },
+                        "calls": {
+                          "type": "integer"
+                        },
+                        "succeeded": {
+                          "type": "boolean"
+                        },
+                        "error_code": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "trace": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "error": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "question"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "condition_updates": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "query_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "event_key": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "group_label": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sent_after": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sent_before": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  },
+                  "clear_conditions": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "query_text",
+                        "event_key",
+                        "group_label",
+                        "sent_after",
+                        "sent_before"
+                      ]
+                    }
+                  },
+                  "search_mode": {
+                    "enum": [
+                      "keyword",
+                      "expanded"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{id}": {
+      "get": {
+        "summary": "会话详情",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/requests/{id}": {
+      "get": {
+        "summary": "脱敏请求日志",
+        "responses": {
+          "200": {
+            "description": "成功；批量导入也可能含逐条失败"
+          },
+          "400": {
+            "description": "字段不合法"
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "404": {
+            "description": "接口或对象不存在"
+          },
+          "409": {
+            "description": "幂等键冲突"
+          },
+          "413": {
+            "description": "请求过大"
+          },
+          "415": {
+            "description": "需要JSON"
+          },
+          "500": {
+            "description": "内部错误"
+          },
+          "502": {
+            "description": "模型无效或证据不通过"
+          },
+          "503": {
+            "description": "模型未配置"
+          },
+          "504": {
+            "description": "模型超时"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "MessageInput": {
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "group_label": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "sent_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO date or timezone-aware datetime"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "event_key": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "fields": {
+                "type": "object",
+                "maxProperties": 20,
+                "additionalProperties": {
+                  "type": "string",
+                  "maxLength": 1000
+                }
+              },
+              "revision_kind": {
+                "enum": [
+                  "initial",
+                  "correction",
+                  "cancellation"
+                ]
+              },
+              "supersedes": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "source_confirmed": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "ImportInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messages"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/MessageInput"
+            }
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 100
+          }
+        }
+      },
+      "QueryInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question"
+        ],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "condition_updates": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "query_text": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "event_key": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "group_label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sent_after": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sent_before": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "clear_conditions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "query_text",
+                "event_key",
+                "group_label",
+                "sent_after",
+                "sent_before"
+              ]
+            }
+          },
+          "search_mode": {
+            "enum": [
+              "keyword",
+              "expanded"
+            ]
+          }
+        }
+      },
+      "QueryResult": {
+        "type": "object",
+        "required": [
+          "status",
+          "request_id"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "answer",
+              "clarify",
+              "not_found",
+              "uncertain",
+              "error"
+            ]
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "query_text": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "event_key": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "group_label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sent_after": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sent_before": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "condition_version": {
+            "type": "integer"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "value",
+                "message_id",
+                "quote"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                },
+                "message_id": {
+                  "type": "string"
+                },
+                "quote": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "coverage": {
+            "type": "object"
+          },
+          "ai": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "mock",
+                  "live"
+                ]
+              },
+              "simulation": {
+                "type": "boolean"
+              },
+              "attempted": {
+                "type": "boolean"
+              },
+              "actual_participation": {
+                "type": "boolean"
+              },
+              "calls": {
+                "type": "integer"
+              },
+              "succeeded": {
+                "type": "boolean"
+              },
+              "error_code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "trace": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

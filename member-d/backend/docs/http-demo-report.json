@@ -1,0 +1,386 @@
+{
+  "label": "模拟数据的真实本地 HTTP 运行；未调用外部 AI",
+  "steps": [
+    {
+      "method": "GET",
+      "path": "/v1/capabilities",
+      "http": 200,
+      "response": {
+        "mode": "mock",
+        "simulation": true,
+        "model_configured": false,
+        "search": "local_ngram_tfidf_with_aliases",
+        "true_semantic_model": false,
+        "workbuddy_certified": false,
+        "max_calls": 3,
+        "request_id": "req_0cf9e9e384b544fe908e6cecfe8259bd"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/imports",
+      "http": 200,
+      "response": {
+        "batch_id": "batch_55275ed9f9644317a55e20e66cfeedb3",
+        "success_count": 3,
+        "failure_count": 0,
+        "items": [
+          {
+            "index": 0,
+            "message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+            "index_status": "ready"
+          },
+          {
+            "index": 1,
+            "message_id": "msg_e87379f1fe5b444e889c721a74fbfb54",
+            "index_status": "ready"
+          },
+          {
+            "index": 2,
+            "message_id": "msg_45ba477e0977403fab79c58d72a058aa",
+            "index_status": "ready"
+          }
+        ],
+        "errors": [],
+        "replayed": false,
+        "request_id": "req_76e327e115684dfdac54a86125abc09a"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/imports",
+      "http": 200,
+      "response": {
+        "batch_id": "batch_2307ada5af934a91834bba58c84d1bd4",
+        "success_count": 1,
+        "failure_count": 0,
+        "items": [
+          {
+            "index": 0,
+            "message_id": "msg_aabce23c23014a308329b9936dbb9c5e",
+            "index_status": "ready"
+          }
+        ],
+        "errors": [],
+        "replayed": false,
+        "request_id": "req_e20d6ad5b53f4845a2987bc0c4a5b648"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/query",
+      "http": 200,
+      "response": {
+        "status": "clarify",
+        "question": "找到多个候选，请选择事件，并通过 condition_updates.event_key 提交。",
+        "options": [
+          {
+            "event_key": "service",
+            "title": "外出志愿服务"
+          },
+          {
+            "event_key": "training",
+            "title": "校内志愿培训"
+          }
+        ],
+        "fields": [],
+        "citations": [],
+        "session_id": "session_bd00531ab1d4467ab9feadd55c8f0a86",
+        "condition_version": 1,
+        "conditions": {
+          "query_text": "志愿活动"
+        },
+        "coverage": {
+          "imported_count": 4,
+          "sent_start": "2026-10-26T01:00:00+00:00",
+          "sent_end": "2026-10-28T04:00:00+00:00",
+          "unknown_time_count": 1,
+          "indexed_count": 4,
+          "groups": [
+            "模拟活动群",
+            "模拟班级群",
+            "模拟课程群"
+          ],
+          "scope": "仅覆盖当前令牌所属数据空间内已导入内容；时间为消息发送时间，不代表连续完整采集"
+        },
+        "ai": {
+          "mode": "mock",
+          "simulation": true,
+          "attempted": false,
+          "actual_participation": false,
+          "calls": 0,
+          "succeeded": false,
+          "error_code": null
+        },
+        "trace": [
+          {
+            "tool": "search",
+            "count": 3,
+            "search": "local_ngram_tfidf_with_aliases"
+          }
+        ],
+        "search_mode": "expanded",
+        "request_id": "req_8d409fbc8ff944c18f7cbb0b18014e46"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/query",
+      "http": 200,
+      "response": {
+        "status": "answer",
+        "answer": "时间：11月1日09:00；地点：图书馆南门；截止：10月30日18:00",
+        "fields": [
+          {
+            "name": "时间",
+            "value": "11月1日09:00",
+            "message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+            "quote": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。"
+          },
+          {
+            "name": "地点",
+            "value": "图书馆南门",
+            "message_id": "msg_aabce23c23014a308329b9936dbb9c5e",
+            "quote": "【模拟数据】外出志愿服务更正：集合地点改为图书馆南门，其他不变。"
+          },
+          {
+            "name": "截止",
+            "value": "10月30日18:00",
+            "message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+            "quote": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。"
+          }
+        ],
+        "citations": [
+          {
+            "message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+            "group_label": "模拟班级群",
+            "sent_at": "2026-10-26T01:00:00+00:00",
+            "quote": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。"
+          },
+          {
+            "message_id": "msg_aabce23c23014a308329b9936dbb9c5e",
+            "group_label": "模拟班级群",
+            "sent_at": "2026-10-28T04:00:00+00:00",
+            "quote": "【模拟数据】外出志愿服务更正：集合地点改为图书馆南门，其他不变。"
+          },
+          {
+            "message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+            "group_label": "模拟班级群",
+            "sent_at": "2026-10-26T01:00:00+00:00",
+            "quote": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。"
+          }
+        ],
+        "event": {
+          "event_key": "service",
+          "title": "外出志愿服务",
+          "messages": [
+            {
+              "id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+              "batch": "batch_55275ed9f9644317a55e20e66cfeedb3",
+              "group_label": "模拟班级群",
+              "content": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。",
+              "sent_at": "2026-10-26T01:00:00+00:00",
+              "imported_at": "2026-10-26T10:30:03.973901+00:00",
+              "metadata": {
+                "event_key": "service",
+                "title": "外出志愿服务",
+                "source_confirmed": true,
+                "fields": {
+                  "时间": "11月1日09:00",
+                  "地点": "东门",
+                  "截止": "10月30日18:00"
+                }
+              },
+              "revision": 1
+            },
+            {
+              "id": "msg_aabce23c23014a308329b9936dbb9c5e",
+              "batch": "batch_2307ada5af934a91834bba58c84d1bd4",
+              "group_label": "模拟班级群",
+              "content": "【模拟数据】外出志愿服务更正：集合地点改为图书馆南门，其他不变。",
+              "sent_at": "2026-10-28T04:00:00+00:00",
+              "imported_at": "2026-10-26T10:30:03.977926+00:00",
+              "metadata": {
+                "event_key": "service",
+                "title": "外出志愿服务",
+                "source_confirmed": true,
+                "revision_kind": "correction",
+                "supersedes": [
+                  "msg_fefda0a7f2ae429592243be5b26b19bf"
+                ],
+                "fields": {
+                  "地点": "图书馆南门"
+                }
+              },
+              "revision": 1
+            }
+          ],
+          "fields": {
+            "时间": [
+              {
+                "value": "11月1日09:00",
+                "message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+                "quote": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。"
+              }
+            ],
+            "地点": [
+              {
+                "value": "图书馆南门",
+                "message_id": "msg_aabce23c23014a308329b9936dbb9c5e",
+                "quote": "【模拟数据】外出志愿服务更正：集合地点改为图书馆南门，其他不变。"
+              }
+            ],
+            "截止": [
+              {
+                "value": "10月30日18:00",
+                "message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+                "quote": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。"
+              }
+            ]
+          },
+          "changes": [
+            {
+              "name": "地点",
+              "before": "东门",
+              "after": "图书馆南门",
+              "from_message_id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+              "to_message_id": "msg_aabce23c23014a308329b9936dbb9c5e",
+              "confirmed_by_importer": true
+            }
+          ],
+          "conflicts": [],
+          "cancelled": false,
+          "source_note": "关联与来源确认由导入者标注，未完成发布者身份的独立认证"
+        },
+        "session_id": "session_bd00531ab1d4467ab9feadd55c8f0a86",
+        "condition_version": 2,
+        "conditions": {
+          "query_text": "志愿活动",
+          "event_key": "service"
+        },
+        "coverage": {
+          "imported_count": 4,
+          "sent_start": "2026-10-26T01:00:00+00:00",
+          "sent_end": "2026-10-28T04:00:00+00:00",
+          "unknown_time_count": 1,
+          "indexed_count": 4,
+          "groups": [
+            "模拟活动群",
+            "模拟班级群",
+            "模拟课程群"
+          ],
+          "scope": "仅覆盖当前令牌所属数据空间内已导入内容；时间为消息发送时间，不代表连续完整采集"
+        },
+        "ai": {
+          "mode": "mock",
+          "simulation": true,
+          "attempted": false,
+          "actual_participation": false,
+          "calls": 0,
+          "succeeded": false,
+          "error_code": null
+        },
+        "trace": [
+          {
+            "tool": "search",
+            "count": 2,
+            "search": "local_ngram_tfidf_with_aliases"
+          }
+        ],
+        "search_mode": "expanded",
+        "request_id": "req_cdde8f252e614c228339de78bda6b25f"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v1/messages/msg_fefda0a7f2ae429592243be5b26b19bf",
+      "http": 200,
+      "response": {
+        "id": "msg_fefda0a7f2ae429592243be5b26b19bf",
+        "batch": "batch_55275ed9f9644317a55e20e66cfeedb3",
+        "group_label": "模拟班级群",
+        "content": "【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。",
+        "sent_at": "2026-10-26T01:00:00+00:00",
+        "imported_at": "2026-10-26T10:30:03.973901+00:00",
+        "metadata": {
+          "event_key": "service",
+          "title": "外出志愿服务",
+          "source_confirmed": true,
+          "fields": {
+            "时间": "11月1日09:00",
+            "地点": "东门",
+            "截止": "10月30日18:00"
+          }
+        },
+        "revision": 1,
+        "request_id": "req_9ad820da3ba74baabe292db41aa1ca10"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v1/coverage",
+      "http": 200,
+      "response": {
+        "imported_count": 4,
+        "sent_start": "2026-10-26T01:00:00+00:00",
+        "sent_end": "2026-10-28T04:00:00+00:00",
+        "unknown_time_count": 1,
+        "indexed_count": 4,
+        "groups": [
+          "模拟活动群",
+          "模拟班级群",
+          "模拟课程群"
+        ],
+        "scope": "仅覆盖当前令牌所属数据空间内已导入内容；时间为消息发送时间，不代表连续完整采集",
+        "request_id": "req_25522eece96944d0a2821096998b3de3"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/query",
+      "http": 200,
+      "response": {
+        "status": "not_found",
+        "answer": "已导入且可检索内容中未找到相关消息。",
+        "fields": [],
+        "citations": [],
+        "session_id": "session_2f977e06088f413faca19c3cc78f8ee1",
+        "condition_version": 1,
+        "conditions": {
+          "query_text": "完全未知天文摄影兑换凭证"
+        },
+        "coverage": {
+          "imported_count": 4,
+          "sent_start": "2026-10-26T01:00:00+00:00",
+          "sent_end": "2026-10-28T04:00:00+00:00",
+          "unknown_time_count": 1,
+          "indexed_count": 4,
+          "groups": [
+            "模拟活动群",
+            "模拟班级群",
+            "模拟课程群"
+          ],
+          "scope": "仅覆盖当前令牌所属数据空间内已导入内容；时间为消息发送时间，不代表连续完整采集"
+        },
+        "ai": {
+          "mode": "mock",
+          "simulation": true,
+          "attempted": false,
+          "actual_participation": false,
+          "calls": 0,
+          "succeeded": false,
+          "error_code": null
+        },
+        "trace": [
+          {
+            "tool": "search",
+            "count": 0,
+            "search": "local_ngram_tfidf_with_aliases"
+          }
+        ],
+        "search_mode": "expanded",
+        "request_id": "req_2a8fd258ba94420b99d425d0a1317358"
+      }
+    }
+  ]
+}
