@@ -1,0 +1,4 @@
+{"idempotency_key":"simulation-seed-v1","messages":[
+{"group_label":"模拟班级群","sent_at":"2026-10-26T09:00:00+08:00","content":"【模拟数据】外出志愿服务：11月1日09:00在东门集合，10月30日18:00前交报名表。","metadata":{"event_key":"service","title":"外出志愿服务","source_confirmed":true,"fields":{"时间":"11月1日09:00","地点":"东门","截止":"10月30日18:00"}}},
+{"group_label":"模拟活动群","sent_at":"2026-10-27T09:00:00+08:00","content":"【模拟数据】校内志愿培训：11月2日14:00在讲堂参加培训。","metadata":{"event_key":"training","title":"校内志愿培训","source_confirmed":true,"fields":{"时间":"11月2日14:00","地点":"讲堂"}}},
+{"group_label":"模拟课程群","content":"【模拟数据】程序设计课程作业：请交实验报告。"}]}

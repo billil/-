@@ -1,0 +1,43 @@
+# REST 客户端可读取此文件；把本机令牌放私有客户端变量，不提交真实令牌。
+@base = http://127.0.0.1:8000
+@token = REPLACE_WITH_LOCAL_TOKEN
+
+### 无需令牌的健康检查
+GET {{base}}/health
+
+### 能力与模拟标识
+GET {{base}}/v1/capabilities
+Authorization: Bearer {{token}}
+
+### 导入模拟数据
+POST {{base}}/v1/imports
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"idempotency_key":"manual-example-1","messages":[{"group_label":"模拟群","content":"【模拟数据】志愿服务在东门集合。","metadata":{"event_key":"manual-service","title":"志愿服务","fields":{"地点":"东门"}}}]}
+
+### 查看消息列表
+GET {{base}}/v1/messages?limit=20&offset=0
+Authorization: Bearer {{token}}
+
+### 查询
+POST {{base}}/v1/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"question":"志愿服务在哪里集合","condition_updates":{"event_key":"manual-service"}}
+
+### 覆盖范围
+GET {{base}}/v1/coverage
+Authorization: Bearer {{token}}
+
+### 重建索引
+POST {{base}}/v1/index/rebuild
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### 事件
+GET {{base}}/v1/events
+Authorization: Bearer {{token}}
