@@ -1,0 +1,9 @@
+state/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.env
+credentials.json
+__pycache__/
+*.pyc
+demo-report.json
