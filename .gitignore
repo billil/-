@@ -1,0 +1,9 @@
+**/state/
+**/demo-runtime/
+**/credentials.json
+**/.env
+**/*.sqlite*
+**/__pycache__/
+**/*.pyc
+**/demo-report.json
+.DS_Store
