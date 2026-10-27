@@ -1,0 +1,7 @@
+# 群忆后端依赖
+fastapi>=0.110
+uvicorn>=0.27
+jieba>=0.42
+sentence-transformers>=2.5
+numpy>=1.26
+pytest>=7.0
