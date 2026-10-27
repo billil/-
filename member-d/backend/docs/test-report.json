@@ -1,0 +1,184 @@
+{
+  "label": "后端自动化验证；模型测试使用替身或本地HTTP合成服务，不是真实AI效果评测",
+  "python": "3.12.14",
+  "platform": "Linux",
+  "count": 43,
+  "passed": 43,
+  "failures": 0,
+  "errors": 0,
+  "duration_seconds": 2.615,
+  "tests": [
+    {
+      "test": "test_backend.BackendTests.test_01_auth",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_02_partial_import",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_03_idempotency",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_04_validation",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_05_cross_workspace",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_06_coverage",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_07_clarify",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_08_no_result",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_09_versions",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_10_unconfirmed_conflict",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_11_chain",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_12_conditions",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_13_sessions",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_14_delete",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_15_patch",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_16_restart",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_17_rebuild",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_18_live_missing",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_19_live_empty_called",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_20_live_timeout",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_21_call_limit",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_22_model_read_denied",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_23_hallucination",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_24_stale",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_25_live_valid",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_26_live_conditions",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_27_logs",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_28_concurrency",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_29_cycle",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_30_cancel",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_31_http",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_32_provider_wire",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_33_backup",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_34_invalid_schema",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendTests.test_35_invalid_filters",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_cross_workspace_supersedes",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_deleted_reference_not_recovered_from_session",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_http_limits_and_content_type",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_invalid_json_shape",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_malformed_model_field_types",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_provider_redirect_and_invalid_json",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_public_config_no_secret",
+      "status": "passed"
+    },
+    {
+      "test": "test_boundaries.Boundaries.test_unicode_token_rejected",
+      "status": "passed"
+    }
+  ]
+}

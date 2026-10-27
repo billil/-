@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>群忆 · AI消息检索助手 | Agent参赛原型 v3.0</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme:{
+        extend:{
+          colors:{
+            primary:'#2563eb',
+            secondary:'#7c3aed',
+            warn:'#f59e0b',
+            danger:'#dc2626',
+            success:'#10b981',
+            neutral:'#475569',
+            light:'#f8fafc'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .scroll-thin::-webkit-scrollbar { width:4px;height:4px; }
+    .scroll-thin::-webkit-scrollbar-thumb { background:#cbd5e1;border-radius:4px; }
+    .badge { @apply text-xs px-2 py-0.5 rounded-full; }
+    .card-hover { @apply transition-all duration-200 hover:shadow-md hover:border-primary/40; }
+    .pulse-anim { animation: pulse 1.4s infinite; }
+    @keyframes pulse {
+      0%,100% { opacity:1; }
+      50% { opacity:0.45; }
+    }
+    .evidence-highlight {
+      background-color:#fef3c7;
+      padding:0 2px;
+      border-radius:2px;
+    }
+    .drawer-mask{
+      background:rgba(0,0,0,0.45);
+    }
+    .skeleton{
+      background:linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%);
+      background-size:200% 100%;
+      animation:skeleton 1.5s infinite;
+    }
+    @keyframes skeleton{
+      0%{background-position:200% 0;}
+      100%{background-position:-200% 0;}
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 text-slate-800 min-h-screen flex flex-col">
+<!-- 导航栏 -->
+<header class="bg-white/90 backdrop-blur shadow-sm sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-3 py-3 flex items-center justify-between flex-wrap gap-2">
+    <div class="flex items-center gap-2">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center text-lg">
+        <i class="fa fa-comments-o"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">群忆</h1>
+        <div class="text-xs text-slate-500">AI消息检索助手 · Agent参赛原型 v3.0</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 flex-wrap">
+      <div class="hidden md:block text-xs text-slate-400">
+        会话ID:<span id="top-session-id" class="font-mono text-primary">-</span>
+      </div>
+      <button id="btn-open-info" class="text-sm bg-slate-100 px-2 py-1 rounded"><i class="fa fa-info-circle"></i>项目信息</button>
+      <nav class="flex gap-1 md:gap-2">
+        <button data-page="lib" class="nav-btn px-3 py-2 rounded-lg bg-primary text-white text-sm">
+          <i class="fa fa-database mr-1"></i>消息库
+        </button>
+        <button data-page="chat" class="nav-btn px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm">
+          <i class="fa fa-search mr-1"></i>智能查找
+        </button>
+        <button data-page="detail" class="nav-btn px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm">
+          <i class="fa fa-file-text-o mr-1"></i>详情
+        </button>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<!-- 项目信息抽屉 -->
+<div id="drawer-info" class="fixed inset-0 z-50 hidden">
+  <div class="drawer-mask absolute inset-0" id="drawer-mask"></div>
+  <div class="absolute right-0 top-0 h-full w-[340px] max-w-[92vw] bg-white shadow-xl overflow-y-auto scroll-thin p-4">
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="font-bold text-lg">项目信息</h3>
+      <button id="btn-close-drawer" class="text-xl">&times;</button>
+    </div>
+    <div class="space-y-4 text-sm">
+      <div>
+        <div class="font-semibold">项目简介</div>
+        <div class="text-slate-600">群忆：基于导入消息的AI Agent检索原型，支持模糊提问、追问、条件更正、原文溯源。</div>
+      </div>
+      <div>
+        <div class="font-semibold">四人分工</div>
+        <ul class="text-slate-600 list-disc pl-4">
+          <li>A：产品&测试统筹</li>
+          <li>B：AI检索与Agent决策</li>
+          <li>C：前端界面交互（当前）</li>
+          <li>D：后端接口与数据存储</li>
+        </ul>
+      </div>
+      <div>
+        <div class="font-semibold">返回状态定义</div>
+        <ul class="text-slate-600 list-disc pl-4">
+          <li><b>answer</b>：找到有效证据答案</li>
+          <li><b>clarify</b>：需要用户补充追问</li>
+          <li><b>not_found</b>：范围内无匹配</li>
+          <li><b>uncertain</b>：证据冲突或不足</li>
+          <li><b>error</b>：服务调用故障（≠无数据）</li>
+        </ul>
+      </div>
+      <div>
+        <div class="font-semibold">测试触发方式</div>
+        <div class="text-slate-600">输入「哪个活动」触发clarify；输入「报错」触发error</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="flex-grow max-w-7xl w-full mx-auto p-3 md:p-4">
+  <!-- ========== 页面1：消息库增强版 ========== -->
+  <section id="page-lib" class="page-block">
+    <div class="grid lg:grid-cols-3 gap-4">
+      <!-- 左侧：导入&工具面板 -->
+      <div class="lg:col-span-1 space-y-4">
+        <div class="bg-white rounded-xl shadow p-4 card-hover">
+          <div class="flex justify-between items-center mb-3">
+            <h2 class="font-semibold text-lg flex items-center gap-2">
+              <i class="fa fa-upload text-primary"></i>导入消息
+            </h2>
+            <span class="badge bg-blue-100 text-primary">C02</span>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm text-slate-600">🏷️ 群/来源标签</label>
+              <input type="text" id="import-source" placeholder="例如：班级通知群 / 社团大群" class="w-full border rounded-lg px-3 py-2 mt-1"/>
+            </div>
+            <div>
+              <label class="text-sm text-slate-600">📄粘贴消息文本（支持多条）</label>
+              <textarea id="import-text" rows="8" placeholder="粘贴聊天记录、通知文本..." class="w-full border rounded-lg px-3 py-2 mt-1 scroll-thin"></textarea>
+            </div>
+            <div class="text-xs text-slate-500 bg-amber-50 p-2 rounded-md">
+              ⚠️隐私提醒：仅导入你拥有权限的文本，本应用<strong>不会自动读取外部聊天软件</strong>。
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button id="btn-import" class="bg-primary text-white px-3 py-2 rounded-lg text-sm">
+                <i class="fa fa-upload mr-1"></i>单条导入
+              </button>
+              <button id="btn-batch-import" class="bg-secondary text-white px-3 py-2 rounded-lg text-sm">
+                <i class="fa fa-files-o mr-1"></i>批量导入(换行分割)
+              </button>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button id="btn-clear-import" class="bg-slate-200 px-3 py-2 rounded-lg text-sm">清空输入</button>
+              <button id="btn-clear-all-msg" class="bg-red-50 text-red-600 px-3 py-2 rounded-lg border border-red-200 text-sm">清空全部库</button>
+              <button id="btn-fill-demo" class="bg-green-50 text-green-700 px-3 py-2 rounded-lg border border-green-200 text-sm">填充示例数据</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 筛选面板 -->
+        <div class="bg-white rounded-xl shadow p-4 card-hover">
+          <h3 class="font-semibold mb-2"><i class="fa fa-filter text-primary"></i>筛选消息库</h3>
+          <div class="space-y-2">
+            <input id="filter-source" placeholder="按来源标签筛选" class="w-full border rounded px-2 py-1.5 text-sm"/>
+            <div class="flex gap-2">
+              <button id="btn-filter-reset" class="flex-1 bg-slate-100 py-1.5 rounded text-sm">重置筛选</button>
+            </div>
+          </div>
+          <div class="mt-2 text-xs text-slate-500">
+            筛选结果：<span id="filter-count">0</span> / <span id="total-lib-count">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧消息列表 -->
+      <div class="lg:col-span-2 bg-white rounded-xl shadow p-4 flex flex-col max-h-[82vh] card-hover">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="font-semibold text-lg flex items-center gap-2">
+            <i class="fa fa-list-alt text-primary"></i>消息库列表
+          </h2>
+          <div class="flex gap-2 items-center">
+            <span class="badge bg-slate-100 text-slate-600">共 <span id="msg-count">0</span> 条</span>
+            <span class="badge bg-blue-100 text-primary">C03</span>
+          </div>
+        </div>
+        <div id="msg-list" class="overflow-y-auto scroll-thin flex-grow space-y-2 pr-1">
+          <div class="text-slate-400 text-sm py-10 text-center">
+            <div class="text-4xl mb-2">📭</div>
+            <div>暂无消息记录</div>
+            <div class="text-xs mt-1">请在左侧导入消息文本或填充示例数据</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========页面2：智能查找增强版（会话侧边栏+统计面板） ========== -->
+  <section id="page-chat" class="page-block hidden">
+    <div class="grid lg:grid-cols-4 gap-4">
+      <!-- 会话侧边栏 -->
+      <div class="lg:col-span-1 bg-white rounded-xl shadow p-4 flex flex-col max-h-[72vh] card-hover">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-semibold"><i class="fa fa-history text-primary"></i>会话列表</h3>
+          <button id="btn-new-session-side" class="text-xs bg-slate-100 px-2 py-1 rounded"><i class="fa fa-plus"></i>新建</button>
+        </div>
+        <div id="session-list-wrap" class="overflow-y-auto scroll-thin flex-grow space-y-1">
+          <div class="text-xs text-slate-400 py-4 text-center">暂无历史会话</div>
+        </div>
+      </div>
+
+      <!-- 主对话区域 -->
+      <div class="lg:col-span-3 bg-white rounded-xl shadow p-4 flex flex-col card-hover" style="min-height:72vh;">
+        <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+          <h2 class="font-semibold text-lg flex items-center gap-2">
+            <i class="fa fa-search text-primary"></i>智能查找
+          </h2>
+          <div class="flex gap-2 items-center">
+            <span class="badge bg-blue-100 text-primary">C04‑C06‑C08‑C09</span>
+            <button id="btn-new-session" class="text-sm bg-slate-100 px-3 py-1 rounded flex items-center gap-1">
+              <i class="fa fa-refresh"></i>新建会话
+            </button>
+            <button id="btn-export-session" class="text-sm bg-green-50 text-green-700 px-3 py-1 rounded border border-green-200">
+              <i class="fa fa-download"></i>导出会话
+            </button>
+          </div>
+        </div>
+
+        <!-- 检索统计信息面板 -->
+        <div class="bg-slate-50 rounded-lg p-2 mb-3 text-xs flex flex-wrap gap-x-4 gap-y-1">
+          <span>📊库内总记录：<b id="stat-lib-total">0</b></span>
+          <span>🆔当前会话：<span class="font-mono text-primary" id="stat-sess-id"></span></span>
+          <span>💡提示：<span class="text-orange-600">error ≠ 没有相关通知</span></span>
+        </div>
+
+        <!-- 当前检索条件展示 -->
+        <div id="query-condition-bar" class="bg-blue-50 rounded-lg px-3 py-2 mb-3 text-sm hidden">
+          <span class="text-slate-600">🎯当前检索条件：</span>
+          <span id="condition-text" class="text-primary font-medium"></span>
+          <button id="btn-clear-condition" class="ml-2 text-xs text-blue-600">清除条件</button>
+        </div>
+
+        <!-- 对话结果区域 -->
+        <div id="chat-container" class="flex-grow overflow-y-auto scroll-thin space-y-4 mb-4 pr-1">
+          <div class="text-slate-400 text-center py-10">
+            <div class="text-4xl mb-2">🔎</div>
+            <div>输入你的问题，AI将检索已导入消息库</div>
+            <div class="text-xs mt-1">支持模糊提问；AI仅基于导入消息作答，不会编造信息</div>
+          </div>
+        </div>
+
+        <!-- 输入框区域 -->
+        <div class="flex gap-2">
+          <textarea id="chat-input" rows="2" placeholder="例如：上个月社团活动时间是什么？" class="flex-grow border rounded-lg px-3 py-2 scroll-thin"></textarea>
+          <button id="btn-submit-query" class="bg-primary text-white px-4 py-2 rounded-lg self-end">
+            <i class="fa fa-paper-plane"></i>
+          </button>
+        </div>
+        <div class="text-xs text-slate-400 mt-2">测试提示：输入「哪个活动」触发追问；输入「报错」触发系统错误状态</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========页面3：结果详情页增强（变更记录面板） ========== -->
+  <section id="page-detail" class="page-block hidden">
+    <div class="bg-white rounded-xl shadow p-4 card-hover">
+      <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+        <h2 class="font-semibold text-lg flex items-center gap-2">
+          <i class="fa fa-file-text-o text-primary"></i>消息原文详情
+        </h2>
+        <div class="flex gap-2">
+          <span class="badge bg-blue-100 text-primary">C07</span>
+          <button id="btn-back-chat" class="text-sm bg-slate-100 px-3 py-1 rounded">
+            <i class="fa fa-arrow-left"></i> 返回查找
+          </button>
+        </div>
+      </div>
+      <div id="detail-body">
+        <div class="text-slate-400 py-10 text-center">
+          <div class="text-4xl mb-2">📄</div>
+          <div>请从AI检索结果点击「查看完整原文」跳转至此</div>
+        </div>
+      </div>
+      <!-- 变更记录面板（B模块事件更正模拟） -->
+      <div class="mt-4 border-t pt-3">
+        <h4 class="font-semibold text-sm mb-2"><i class="fa fa-exchange text-warn"></i>事件变更记录（模拟）</h4>
+        <div id="change-log-panel" class="bg-orange-50 rounded p-3 text-sm text-slate-600">
+          <div class="text-xs text-slate-400">暂无更正/改期记录，当识别通知更正时此处展示原值、新值、证据来源</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 全局toast弹窗 -->
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg text-white z-50 hidden"></div>
+
+<script>
+// ---------------- 全局状态
+const state = {
+  currentPage:'lib',
+  messageList:[],
+  filterKeyword:'',
+  sessionId:'sess_'+Math.random().toString(36),
+  currentDetailId:null,
+  chatHistory:[],
+  sessionHistoryList:[]
+}
+// DOM快捷
+const $$ = s=>document.querySelector(s);
+const $$all = s=>document.querySelectorAll(s);
+
+// 更新会话ID显示
+function refreshSessionDisplay(){
+  $$('#top-session-id').innerText = state.sessionId;
+  $$('#stat-sess-id').innerText = state.sessionId;
+  $$('#stat-lib-total').innerText = state.messageList.length;
+}
+refreshSessionDisplay();
+
+// 抽屉控制
+$$('#btn-open-info').onclick = ()=>$$('#drawer-info').classList.remove('hidden');
+$$('#btn-close-drawer').onclick = ()=>$$('#drawer-info').classList.add('hidden');
+$$('#drawer-mask').onclick = ()=>$$('#drawer-info').classList.add('hidden');
+
+// 页面切换
+$$all('.nav-btn').forEach(btn=>{
+  btn.onclick = ()=>{
+    const pg = btn.dataset.page;
+    switchPage(pg);
+  }
+})
+function switchPage(name){
+  state.currentPage = name;
+  $$all('.page-block').forEach(p=>p.classList.add('hidden'));
+  $$(`#page-${name}`).classList.remove('hidden');
+  $$all('.nav-btn').forEach(b=>{
+    if(b.dataset.page===name){
+      b.className = "nav-btn px-3 py-2 rounded-lg bg-primary text-white text-sm"
+    }else{
+      b.className = "nav-btn px-3 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm"
+    }
+  })
+  refreshLibStat();
+}
+
+function refreshLibStat(){
+  $$('#stat-lib-total').innerText = state.messageList.length;
+  $$('#total-lib-count').innerText = state.messageList.length;
+}
+
+// toast提示
+function showToast(msg,type='info'){
+  const t = $$('#toast');
+  t.textContent = msg;
+  t.className = "fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg text-white z-50";
+  if(type==='success') t.classList.add('bg-success');
+  else if(type==='error') t.classList.add('bg-danger');
+  else if(type==='warn') t.classList.add('bg-warn');
+  else t.classList.add('bg-neutral');
+  t.classList.remove('hidden');
+  setTimeout(()=>t.classList.add('hidden'),2200);
+}
+
+// ===== 消息库功能：单条、批量导入、示例填充、筛选
+$$('#btn-import').onclick = function(){
+  const source = $$('#import-source').value.trim();
+  const text = $$('#import-text').value.trim();
+  if(!text){ showToast("文本不能为空！","error"); return; }
+  const newMsg = { id:"msg_"+Date.now(), source: source||"未标记来源", raw:text, sendTime:new Date().toLocaleString() };
+  state.messageList.unshift(newMsg);
+  renderMsgList();
+  $$('#import-text').value = '';
+  showToast("✅导入成功","success");
+}
+
+$$('#btn-batch-import').onclick = function(){
+  const source = $$('#import-source').value.trim()||"未标记来源";
+  const textAll = $$('#import-text').value.trim();
+  if(!textAll){ showToast("文本不能为空！","error"); return; }
+  const lines = textAll.split(/\r?\n/).filter(x=>x.trim());
+  lines.forEach(txt=>{
+    state.messageList.unshift({
+      id:"msg_"+Date.now()+"_"+Math.random().toString(36),
+      source, raw:txt.trim(), sendTime:new Date().toLocaleString()
+    })
+  })
+  renderMsgList();
+  $$('#import-text').value='';
+  showToast(`批量导入${lines.length}条消息`,"success");
+}
+
+$$('#btn-fill-demo').onclick = function(){
+  const demo = [
+    {source:"社团通知群",raw:"社团招新活动定于11月5日晚上19点，大学生活动中心一楼。"},
+    {source:"社团通知群",raw:"更正：社团招新改为11月8日晚上18:30，地点不变。"},
+    {source:"班级群",raw:"10月30日下午两点班级班会，需要提交实践报告。"},
+    {source:"竞赛群",raw:"AI竞赛提交截止11月12日，需要提交原型+说明文档。"}
+  ]
+  demo.forEach(d=>{
+    state.messageList.unshift({id:"msg_"+Date.now()+"_"+Math.random().toString(36),source:d.source,raw:d.raw,sendTime:new Date().toLocaleString()})
+  })
+  renderMsgList();
+  showToast("已填充4条示例测试数据","success");
+}
+
+$$('#btn-clear-import').onclick = ()=>{ $$('#import-source').value=''; $$('#import-text').value=''; }
+$$('#btn-clear-all-msg').onclick = ()=>{
+  if(!confirm("⚠️确定清空整个消息库？所有记录不可恢复！")) return;
+  state.messageList = [];
+  renderMsgList();
+  showToast("已清空消息库","warn");
+}
+
+// 筛选
+$$('#filter-source').oninput = e=>{
+  state.filterKeyword = e.target.value.trim().toLowerCase();
+  renderMsgList();
+}
+$$('#btn-filter-reset').onclick = ()=>{
+  state.filterKeyword = '';
+  $$('#filter-source').value='';
+  renderMsgList();
+}
+
+function renderMsgList(){
+  let arr = state.messageList;
+  if(state.filterKeyword){
+    arr = arr.filter(m=> m.source.toLowerCase().includes(state.filterKeyword) || m.raw.toLowerCase().includes(state.filterKeyword))
+  }
+  const wrap = $$('#msg-list');
+  $$('#msg-count').textContent = state.messageList.length;
+  $$('#filter-count').textContent = arr.length;
+  refreshLibStat();
+  if(arr.length===0){
+    wrap.innerHTML = `<div class="text-slate-400 text-sm py-10 text-center">
+      <div class="text-4xl mb-2">📭</div>
+      <div>${state.filterKeyword?"筛选无匹配":"暂无消息记录"}</div>
+      <div class="text-xs mt-1">请导入消息或填充示例数据</div>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML = arr.map(m=>`
+  <div class="border rounded-lg p-2 hover:bg-slate-50 card-hover">
+    <div class="flex justify-between items-center flex-wrap gap-1">
+      <span class="badge bg-blue-100 text-primary">${escapeHtml(m.source)}</span>
+      <span class="text-xs text-slate-400 font-mono">${escapeHtml(m.id)}</span>
+    </div>
+    <div class="text-xs text-slate-400 mt-1">🕐${escapeHtml(m.sendTime)}</div>
+    <div class="text-sm mt-1 line-clamp-2 text-slate-700">${escapeHtml(m.raw)}</div>
+    <div class="flex gap-3 mt-2">
+      <button data-id="${m.id}" class="btn-view-detail text-xs text-primary flex items-center gap-1">
+        <i class="fa fa-eye"></i>查看原文
+      </button>
+      <button data-id="${m.id}" class="btn-del-msg text-xs text-danger flex items-center gap-1">
+        <i class="fa fa-trash"></i>删除
+      </button>
+    </div>
+  </div>
+  `).join('');
+  wrap.querySelectorAll('.btn-view-detail').forEach(el=>el.onclick=()=>{
+    state.currentDetailId = el.dataset.id;
+    renderDetail(state.currentDetailId);
+    switchPage('detail');
+  })
+  wrap.querySelectorAll('.btn-del-msg').forEach(el=>el.onclick=()=>{
+    const id = el.dataset.id;
+    if(confirm("确定删除这条消息？删除后不可恢复")){
+      state.messageList = state.messageList.filter(x=>x.id!==id);
+      renderMsgList();
+      showToast("已删除记录","warn");
+    }
+  })
+}
+
+// 详情页渲染
+$$('#btn-back-chat').onclick = ()=>switchPage('chat');
+function renderDetail(msgId){
+  const item = state.messageList.find(x=>x.id===msgId);
+  const wrap = $$('#detail-body');
+  const changePanel = $$('#change-log-panel');
+  if(!item){
+    wrap.innerHTML = `<div class="text-slate-400 py-10 text-center">
+      <div class="text-4xl mb-2">🗑️</div>
+      <div>记录不存在，可能已被删除</div>
+    </div>`;
+    changePanel.innerHTML = `<div class="text-xs text-slate-400">暂无更正/改期记录</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+  <div class="space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm bg-slate-50 p-3 rounded-lg">
+      <div><span class="text-slate-500">🏷️来源标签：</span><span class="badge bg-blue-100 text-primary">${escapeHtml(item.source)}</span></div>
+      <div><span class="text-slate-500">🆔消息ID：</span><span class="font-mono">${escapeHtml(item.id)}</span></div>
+      <div><span class="text-slate-500">📥导入时间：</span>${escapeHtml(item.sendTime)}</div>
+    </div>
+    <div>
+      <div class="text-sm text-slate-500 mb-1">📄原文内容：</div>
+      <pre class="border p-3 rounded-lg whitespace-pre-wrap text-sm bg-slate-50 max-h-[55vh] overflow-y-auto scroll-thin">${escapeHtml(item.raw)}</pre>
+    </div>
+  </div>
+  `
+  // 模拟变更记录演示（社团招新改期样例）
+  if(item.raw.includes("社团招新")){
+    changePanel.innerHTML = `
+    <div class="space-y-2 text-xs">
+      <div class="font-medium">检测到通知更正事件</div>
+      <div>🕒原时间：11月5日 19:00</div>
+      <div>✅更正后：11月8日 18:30</div>
+      <div>📍地点：大学生活动中心一楼（不变）</div>
+      <div class="text-slate-500 mt-1">证据来源：两条社团通知消息</div>
+    </div>`
+  }else{
+    changePanel.innerHTML = `<div class="text-xs text-slate-400">暂无更正/改期记录，当识别通知更正时此处展示原值、新值、证据来源</div>`
+  }
+}
+
+// ====== 智能查找模块
+$$('#btn-new-session').onclick = newSession;
+$$('#btn-new-session-side').onclick = newSession;
+$$('#btn-clear-condition').onclick = ()=>{ $$('#query-condition-bar').classList.add('hidden'); }
+
+function newSession(){
+  state.sessionId = 'sess_'+Math.random().toString(36);
+  state.chatHistory = [];
+  refreshSessionDisplay();
+  $$('#chat-container').innerHTML = `<div class="text-slate-400 text-center py-10">
+    <div class="text-4xl mb-2">🔎</div>
+    <div>输入你的问题，AI将检索已导入消息库</div>
+  </div>`;
+  $$('#query-condition-bar').classList.add('hidden');
+  showToast("已开启全新会话","info");
+}
+
+$$('#btn-export-session').onclick = ()=>{
+  const exportText = `会话ID:${state.sessionId}\n${JSON.stringify(state.chatHistory,null,2)}`;
+  const blob = new Blob([exportText],{type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `session_${state.sessionId}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast("会话记录已导出","success");
+}
+
+$$('#btn-submit-query').onclick = submitQuery;
+$$('#chat-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    submitQuery();
+  }
+})
+
+async function submitQuery(){
+  const inputEl = $$('#chat-input');
+  const q = inputEl.value.trim();
+  if(!q) return;
+  const chatWrap = $$('#chat-container');
+  addChatBubble('user',q);
+  state.chatHistory.push({role:"user",content:q});
+  inputEl.value = '';
+
+  const loadingId = addChatBubble('ai',`<span class="text-slate-400"><i class="fa fa-spinner fa-spin pulse-anim"></i>正在检索消息库，调用AI Agent...</span>`);
+
+  // ==========【对接D后端接口位置】联调删除下面模拟，替换fetch
+  await sleep(1400);
+  let mockResp;
+  if(state.messageList.length===0){
+    mockResp = { status:"not_found", answerText:"消息库为空，请先导入消息。", references:[], condition:null }
+  }else if(q.includes("哪个活动")||q.includes("哪一个")){
+    mockResp = { status:"clarify", answerText:"找到多条相似记录，请补充说明时间或者地点，帮我进一步区分。", references:[], condition:null }
+  }else if(q.includes("报错")){
+    mockResp = { status:"error", answerText:"调用模型服务异常，请稍后重试。", references:[], condition:null }
+  }else if(q.includes("社团招新")){
+    mockResp = {
+      status:"answer",
+      answerText:"社团招新活动经过更正，最终时间为11月8日18:30，地点大学生活动中心一楼。",
+      references: state.messageList.filter(m=>m.raw.includes("社团招新")).map(x=>({msgId:x.id,fragment:x.raw})),
+      condition:q
+    }
+  }else{
+    const ref = state.messageList[0];
+    mockResp = {
+      status:"answer",
+      answerText:"根据检索消息库得到这条参考结果。",
+      references:[{msgId:ref.id,fragment:ref.raw.slice(0,72)+'...'}],
+      condition:q
+    }
+  }
+  // =========模拟结束=========================
+
+  removeChatBubble(loadingId);
+  renderAiResult(mockResp);
+  state.chatHistory.push({role:"ai",resp:mockResp});
+}
+
+function renderAiResult(resp){
+  const chatWrap = $$('#chat-container');
+  if(resp.condition){
+    $$('#condition-text').textContent = resp.condition;
+    $$('#query-condition-bar').classList.remove('hidden');
+  }
+
+  let html = '';
+  const status = resp.status;
+  const statusBadgeMap = {
+    answer:{text:"✅检索到答案",cls:"bg-green-100 text-green-700"},
+    clarify:{text:"💬需要补充信息",cls:"bg-amber-100 text-amber-700"},
+    not_found:{text:"🔍范围内无匹配记录",cls:"bg-slate-100 text-slate-600"},
+    uncertain:{text:"⚠️信息冲突/证据不足",cls:"bg-orange-100 text-orange-700"},
+    error:{text:"❌系统调用失败",cls:"bg-red-100 text-red-700"}
+  }
+  const badgeInfo = statusBadgeMap[status];
+  html += `<div class="badge ${badgeInfo.cls} mb-2 inline-block">${badgeInfo.text}</div>`;
+  html += `<div class="mb-2">${escapeHtml(resp.answerText)}</div>`;
+
+  if(resp.references && resp.references.length>0){
+    html += `<div class="mt-3">
+      <div class="text-xs text-slate-500 mb-1">📎参考证据来源：</div>`
+    resp.references.forEach(ref=>{
+      html += `
+      <div class="border rounded p-2 text-sm my-1 bg-amber-50 card-hover">
+        <div class="text-xs text-slate-500 font-mono">消息ID:${escapeHtml(ref.msgId)}</div>
+        <div class="text-slate-700 mt-1 evidence-highlight">${escapeHtml(ref.fragment)}</div>
+        <button data-refid="${ref.msgId}" class="btn-jump-detail text-xs mt-1 text-primary">
+          <i class="fa fa-external-link"></i>查看完整原文
+        </button>
+      </div>`
+    })
+    html += `</div>`
+  }
+  if(status === 'error'){
+    html += `<div class="text-xs text-red-500 mt-2">【重要提示】：该状态属于服务故障，不等于“没有相关通知”</div>`
+  }
+
+  const bubbleId = addChatBubble('ai',html);
+  chatWrap.querySelector(`[data-bubble-id="${bubbleId}"]`).querySelectorAll('.btn-jump-detail').forEach(btn=>{
+    btn.onclick = ()=>{
+      const rid = btn.dataset.refid;
+      state.currentDetailId = rid;
+      renderDetail(rid);
+      switchPage('detail');
+    }
+  })
+}
+
+let bubbleCounter = 0;
+function addChatBubble(role,html){
+  bubbleCounter++;
+  const wrap = $$('#chat-container');
+  const div = document.createElement('div');
+  div.dataset.bubbleId = bubbleCounter;
+  div.className = role==='user'
+    ? "flex justify-end"
+    : "flex justify-start";
+  div.innerHTML = `
+    <div class="${role==='user'?'bg-primary text-white':'bg-slate-100 text-slate-800'} max-w-[85%] md:max-w-[72%] rounded-xl px-3 py-2">
+      ${html}
+    </div>
+  `
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return bubbleCounter;
+}
+function removeChatBubble(id){
+  const el = $$(`[data-bubble-id="${id}"]`);
+  if(el) el.remove();
+}
+
+// 工具
+function escapeHtml(str){
+  if(!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// 初始化
+switchPage('lib');
+</script>
+</body>
+</html>

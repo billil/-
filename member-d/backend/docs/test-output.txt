@@ -1,0 +1,48 @@
+test_01_auth (test_backend.BackendTests.test_01_auth) ... ok
+test_02_partial_import (test_backend.BackendTests.test_02_partial_import) ... ok
+test_03_idempotency (test_backend.BackendTests.test_03_idempotency) ... ok
+test_04_validation (test_backend.BackendTests.test_04_validation) ... ok
+test_05_cross_workspace (test_backend.BackendTests.test_05_cross_workspace) ... ok
+test_06_coverage (test_backend.BackendTests.test_06_coverage) ... ok
+test_07_clarify (test_backend.BackendTests.test_07_clarify) ... ok
+test_08_no_result (test_backend.BackendTests.test_08_no_result) ... ok
+test_09_versions (test_backend.BackendTests.test_09_versions) ... ok
+test_10_unconfirmed_conflict (test_backend.BackendTests.test_10_unconfirmed_conflict) ... ok
+test_11_chain (test_backend.BackendTests.test_11_chain) ... ok
+test_12_conditions (test_backend.BackendTests.test_12_conditions) ... ok
+test_13_sessions (test_backend.BackendTests.test_13_sessions) ... ok
+test_14_delete (test_backend.BackendTests.test_14_delete) ... ok
+test_15_patch (test_backend.BackendTests.test_15_patch) ... ok
+test_16_restart (test_backend.BackendTests.test_16_restart) ... ok
+test_17_rebuild (test_backend.BackendTests.test_17_rebuild) ... ok
+test_18_live_missing (test_backend.BackendTests.test_18_live_missing) ... ok
+test_19_live_empty_called (test_backend.BackendTests.test_19_live_empty_called) ... ok
+test_20_live_timeout (test_backend.BackendTests.test_20_live_timeout) ... ok
+test_21_call_limit (test_backend.BackendTests.test_21_call_limit) ... ok
+test_22_model_read_denied (test_backend.BackendTests.test_22_model_read_denied) ... ok
+test_23_hallucination (test_backend.BackendTests.test_23_hallucination) ... ok
+test_24_stale (test_backend.BackendTests.test_24_stale) ... ok
+test_25_live_valid (test_backend.BackendTests.test_25_live_valid) ... ok
+test_26_live_conditions (test_backend.BackendTests.test_26_live_conditions) ... ok
+test_27_logs (test_backend.BackendTests.test_27_logs) ... ok
+test_28_concurrency (test_backend.BackendTests.test_28_concurrency) ... ok
+test_29_cycle (test_backend.BackendTests.test_29_cycle) ... ok
+test_30_cancel (test_backend.BackendTests.test_30_cancel) ... ok
+test_31_http (test_backend.BackendTests.test_31_http) ... ok
+test_32_provider_wire (test_backend.BackendTests.test_32_provider_wire) ... ok
+test_33_backup (test_backend.BackendTests.test_33_backup) ... ok
+test_34_invalid_schema (test_backend.BackendTests.test_34_invalid_schema) ... ok
+test_35_invalid_filters (test_backend.BackendTests.test_35_invalid_filters) ... ok
+test_cross_workspace_supersedes (test_boundaries.Boundaries.test_cross_workspace_supersedes) ... ok
+test_deleted_reference_not_recovered_from_session (test_boundaries.Boundaries.test_deleted_reference_not_recovered_from_session) ... ok
+test_http_limits_and_content_type (test_boundaries.Boundaries.test_http_limits_and_content_type) ... ok
+test_invalid_json_shape (test_boundaries.Boundaries.test_invalid_json_shape) ... ok
+test_malformed_model_field_types (test_boundaries.Boundaries.test_malformed_model_field_types) ... ok
+test_provider_redirect_and_invalid_json (test_boundaries.Boundaries.test_provider_redirect_and_invalid_json) ... ok
+test_public_config_no_secret (test_boundaries.Boundaries.test_public_config_no_secret) ... ok
+test_unicode_token_rejected (test_boundaries.Boundaries.test_unicode_token_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 43 tests in 2.567s
+
+OK
