@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>群忆 · 校园群通知 AI 检索</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f5df0'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif'%3E忆%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand__mark">忆</div>
+        <div>
+          <div class="brand__name">群忆</div>
+          <div class="brand__sub">校园群通知检索</div>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav__item" data-route="#/overview"><span class="nav__icon">◎</span>概览</button>
+        <button class="nav__item" data-route="#/library"><span class="nav__icon">☰</span>消息库<span class="nav__badge" id="nav-msg-count"></span></button>
+        <button class="nav__item" data-route="#/search"><span class="nav__icon">✦</span>智能查找</button>
+        <button class="nav__item" data-route="#/system"><span class="nav__icon">⚙</span>系统状态</button>
+      </nav>
+
+      <div class="sidebar__foot">
+        <div class="conn" id="conn-card">
+          <div class="conn__row"><span class="dot" id="conn-dot"></span><span id="conn-text">未连接</span></div>
+          <div class="conn__row small muted" id="conn-mode">—</div>
+          <button class="btn btn--sm btn--block" id="btn-connect" style="margin-top:8px">连接设置</button>
+        </div>
+        <div class="small muted" style="padding:0 4px">成员 C · 前端<br />对接成员 D 后端</div>
+      </div>
+    </aside>
+
+    <!-- 主区 -->
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="page-title">概览</h1>
+          <div class="topbar__sub" id="page-sub">—</div>
+        </div>
+        <div class="topbar__spacer"></div>
+        <span class="badge badge--info" id="mode-badge" title="后端检索/模型模式">—</span>
+        <button class="btn btn--sm" id="btn-refresh" title="重新拉取覆盖范围">刷新</button>
+        <button class="btn btn--sm btn--primary" id="btn-quick-ask">提问</button>
+      </header>
+
+      <main class="view" id="view">
+        <div class="empty"><span class="empty__icon">◌</span>正在载入…</div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 全局挂载点 -->
+  <div id="modal-host"></div>
+  <div id="toast-host"></div>
+
+  <script type="module" src="./assets/app.js"></script>
+</body>
+</html>
