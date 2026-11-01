@@ -1,0 +1,14 @@
+[Unit]
+Description=Qunyi temporary demonstration restricted gateway
+After=qunyi-frontend.service
+[Service]
+User=qunyi
+Group=qunyi
+ExecStart=/usr/bin/python3 /opt/qunyi-demo-gateway/gateway.py
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+[Install]
+WantedBy=multi-user.target
