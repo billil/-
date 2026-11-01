@@ -28,6 +28,16 @@ class Store:
           question TEXT NOT NULL,result TEXT NOT NULL,created TEXT);
         CREATE TABLE IF NOT EXISTS request_logs(id TEXT PRIMARY KEY,workspace TEXT NOT NULL,route TEXT,status INTEGER,
           duration_ms INTEGER,metadata TEXT,created TEXT);
+        CREATE TABLE IF NOT EXISTS groups(workspace TEXT NOT NULL,group_key TEXT NOT NULL,
+          label TEXT NOT NULL,source TEXT NOT NULL DEFAULT 'manual',authorized INTEGER NOT NULL DEFAULT 0,
+          last_received TEXT,last_event_id TEXT,created TEXT,updated TEXT,
+          PRIMARY KEY(workspace,group_key));
+        CREATE TABLE IF NOT EXISTS subscriptions(workspace TEXT NOT NULL,group_key TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,cursor TEXT,created TEXT,updated TEXT,
+          PRIMARY KEY(workspace,group_key));
+        CREATE TABLE IF NOT EXISTS sync_events(id TEXT PRIMARY KEY,source TEXT NOT NULL,
+          group_key TEXT,received TEXT,status TEXT NOT NULL,message_id TEXT,error_code TEXT);
+        CREATE INDEX IF NOT EXISTS sync_events_group ON sync_events(group_key,received);
         ''')
         self.db.commit()
 

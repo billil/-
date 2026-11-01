@@ -15,6 +15,10 @@ class Config:
     deadline: float = 30.0
     max_calls: int = 3
     allow_http_loopback: bool = False
+    qq_bot_secret: str = field(default='', repr=False)
+    qq_workspace: str = ''
+    qq_require_signature: bool = True
+    qq_ingest_token: str = field(default='', repr=False)
 
     def validate(self):
         self.state = Path(self.state)
@@ -50,4 +54,8 @@ class Config:
                    os.environ.get('QUNYI_MODEL_URL',''),os.environ.get('QUNYI_MODEL',''),
                    os.environ.get('QUNYI_API_KEY',''),float(os.environ.get('QUNYI_TIMEOUT','12')),
                    float(os.environ.get('QUNYI_DEADLINE','30')),int(os.environ.get('QUNYI_MAX_CALLS','3')),
-                   os.environ.get('QUNYI_ALLOW_HTTP_LOOPBACK')=='1').validate()
+                   os.environ.get('QUNYI_ALLOW_HTTP_LOOPBACK')=='1',
+                   os.environ.get('QUNYI_QQ_BOT_SECRET',''),
+                   os.environ.get('QUNYI_QQ_WORKSPACE',''),
+                   os.environ.get('QUNYI_QQ_REQUIRE_SIGNATURE','1')!='0',
+                   os.environ.get('QUNYI_QQ_INGEST_TOKEN','')).validate()

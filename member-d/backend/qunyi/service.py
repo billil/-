@@ -1,4 +1,4 @@
-import hashlib, json, re, sqlite3, time
+import hashlib, json, re, sqlite3, time, os, binascii, hmac
 from datetime import datetime, timezone, timedelta
 from .store import Store,uid,now,dump
 from .search import LocalSearch
@@ -50,9 +50,16 @@ class Service:
         rid=uid('req');start=time.monotonic();space=None
         with self.store.lock:
             try:
-                if method=='GET' and path=='/health':
+                if method=='GET' and path in ('/health','/api/health'):
                     self.store.one('SELECT 1 AS ok')
                     return 200,{'ok':True,'version':'0.1.0','request_id':rid}
+                if method=='POST' and path=='/v1/internal/qq/messages':
+                    status,data=self.route(method,path,body or {},'',params or {},rid,start)
+                    self.store.commit();data['request_id']=rid;return status,data
+                if method=='POST' and path=='/v1/webhooks/qq':
+                    # QQ callbacks authenticate with their signature, not the user Bearer token.
+                    status,data=self.route(method,path,body or {},'',params or {},rid,start)
+                    self.store.commit();data['request_id']=rid;return status,data
                 space=self.workspace(authorization)
                 require(body is None or isinstance(body,dict),message='JSON 顶层必须为对象')
                 status,data=self.route(method,path,body or {},space,params or {},rid,start)
@@ -76,11 +83,28 @@ class Service:
         if path.startswith('/v1/messages/'):return '/v1/messages/:id'
         if path.startswith('/v1/sessions/'):return '/v1/sessions/:id'
         if path.startswith('/v1/requests/'):return '/v1/requests/:id'
-        return path if path in ('/v1/imports','/v1/messages','/v1/coverage','/v1/query','/v1/events','/v1/index/rebuild','/v1/capabilities') else '/unknown'
+        return path if path in ('/v1/imports','/v1/messages','/api/health','/v1/coverage','/v1/query','/v1/events','/v1/index/rebuild','/v1/capabilities','/v1/groups','/v1/subscriptions','/v1/notifications','/v1/sync/status','/v1/webhooks/qq','/v1/internal/qq/messages') else '/unknown'
     def route(self,m,p,b,s,q,rid,start):
+        if m=='GET' and p=='/v1/me':
+            return 200,{'user_id':s,'workspace':s,'auth_kind':'installation_token','group_access':'workspace_scoped','oauth_required_for_production':True}
         if m=='GET' and p=='/v1/capabilities':
             return 200,{'mode':self.cfg.mode,'simulation':self.cfg.mode=='mock','model_configured':bool(self.cfg.endpoint and self.cfg.model and self.cfg.api_key),'search':self.search.name,'true_semantic_model':False,'workbuddy_certified':False,'max_calls':self.cfg.max_calls}
         if m=='POST' and p=='/v1/imports':return 200,self.imports(s,b)
+        if m=='GET' and p=='/v1/groups':return 200,self.groups(s)
+        if m=='POST' and p=='/v1/subscriptions':return 200,self.subscribe(s,b)
+        if m=='GET' and p=='/v1/subscriptions':return 200,self.subscriptions(s)
+        if m=='DELETE' and p.startswith('/v1/subscriptions/'):
+            key=text(p.rsplit('/',1)[-1],'group_key',200);self.unsubscribe(s,key);return 200,{'group_key':key,'enabled':False}
+        if m=='GET' and p=='/v1/notifications':return 200,self.notifications(s,q)
+        if m=='POST' and p=='/v1/notifications/ack':return 200,self.ack_notifications(s,b)
+        if m=='GET' and p=='/v1/sync/status':return 200,self.sync_status(s)
+        if m=='POST' and p=='/v1/internal/qq/messages':return 200,self.qq_ingest(b,q)
+        if m=='POST' and p=='/v1/webhooks/qq':return 200,self.qq_webhook(b,q)
+        # B-compatible read/query aliases. The response remains D's evidence-checked contract.
+        if m=='POST' and p=='/api/search':
+            return 200,self.query(s,{'question':b.get('query'),'session_id':b.get('session_id')},rid,start)
+        if m=='POST' and p=='/api/answer_ask':
+            return 200,self.query(s,{'question':b.get('reply'),'session_id':b.get('session_id')},rid,start)
         if m=='GET' and p=='/v1/messages':
             try:limit=int(q.get('limit','20'));offset=int(q.get('offset','0'))
             except (ValueError,TypeError):raise ApiError(400,'INVALID_INPUT','分页必须为整数')
@@ -128,6 +152,122 @@ class Service:
             require(bool(row),'NOT_FOUND','请求记录不存在',404)
             row.pop('workspace');row['metadata']=json.loads(row['metadata']);return 200,row
         raise ApiError(404,'NOT_FOUND','接口不存在')
+
+    def _ensure_group(self,s,key,label=None,source='import',authorized=True):
+        key=text(str(key),'group_key',200);label=text(label or key,'group_label',100)
+        nowv=now()
+        self.store.db.execute('''INSERT INTO groups(workspace,group_key,label,source,authorized,last_received,created,updated)
+          VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace,group_key) DO UPDATE SET label=excluded.label,source=excluded.source,
+          authorized=excluded.authorized,updated=excluded.updated''',(s,key,label,source,1 if authorized else 0,None,nowv,nowv))
+
+    def groups(self,s):
+        rows=self.store.rows('SELECT * FROM groups WHERE workspace=? ORDER BY label,group_key',(s,))
+        return {'items':rows,'count':len(rows),'scope':'仅返回当前用户数据空间内已登记且有访问资格的群'}
+
+    def subscriptions(self,s):
+        rows=self.store.rows('''SELECT s.group_key,s.enabled,s.cursor,s.created,s.updated,g.label,g.source,g.authorized
+          FROM subscriptions s LEFT JOIN groups g ON g.workspace=s.workspace AND g.group_key=s.group_key
+          WHERE s.workspace=? ORDER BY g.label,s.group_key''',(s,))
+        return {'items':rows,'count':len(rows)}
+
+    def subscribe(self,s,b):
+        require(set(b)<= {'group_keys'} and isinstance(b.get('group_keys'),list) and 1<=len(b['group_keys'])<=100,message='group_keys 必须为1至100项')
+        result=[]
+        for key in b['group_keys']:
+            key=text(key,'group_key',200)
+            g=self.store.one('SELECT * FROM groups WHERE workspace=? AND group_key=?',(s,key))
+            require(bool(g) and g['authorized'],'GROUP_FORBIDDEN','群未接入或当前用户没有访问资格',403)
+            self.store.db.execute('''INSERT INTO subscriptions VALUES(?,?,?,?,?,?) ON CONFLICT(workspace,group_key)
+              DO UPDATE SET enabled=1,updated=excluded.updated''',(s,key,1,None,now(),now()))
+            result.append(key)
+        return {'subscribed':result,'count':len(result)}
+
+    def unsubscribe(self,s,key):
+        self.store.db.execute('UPDATE subscriptions SET enabled=0,updated=? WHERE workspace=? AND group_key=?',(now(),s,key))
+
+    def _subscribed_groups(self,s):
+        return {r['group_key'] for r in self.store.rows('SELECT group_key FROM subscriptions WHERE workspace=? AND enabled=1',(s,))}
+
+    def notifications(self,s,q):
+        groups=self._subscribed_groups(s)
+        try:limit=max(1,min(100,int(q.get('limit','50'))));after=q.get('after') or ''
+        except (ValueError,TypeError):raise ApiError(400,'INVALID_INPUT','分页参数不正确')
+        if not groups:return {'items':[],'next_cursor':after,'sync':self.sync_status(s)}
+        placeholders=','.join('?'*len(groups));args=[s,*sorted(groups),after]
+        rows=self.store.rows(f'''SELECT * FROM messages WHERE workspace=? AND group_label IN ({placeholders})
+          AND imported_at>? ORDER BY imported_at,id LIMIT ?''',(*args,limit+1))
+        more=len(rows)>limit;rows=rows[:limit]
+        cursor=rows[-1]['imported_at'] if rows else after
+        return {'items':[self.public(r) for r in rows],'next_cursor':cursor,'has_more':more,'sync':self.sync_status(s)}
+
+    def ack_notifications(self,s,b):
+        require(set(b)<= {'group_key','cursor'} and isinstance(b.get('group_key'),str) and isinstance(b.get('cursor'),str),message='确认游标不正确')
+        self.store.db.execute('UPDATE subscriptions SET cursor=?,updated=? WHERE workspace=? AND group_key=?',(b['cursor'],now(),s,b['group_key']))
+        return {'group_key':b['group_key'],'cursor':b['cursor']}
+
+    def sync_status(self,s):
+        r=self.store.one('''SELECT max(received) AS last_received,count(*) AS events,
+          sum(status='accepted') AS accepted,sum(status='error') AS errors FROM sync_events WHERE group_key IN
+          (SELECT group_key FROM groups WHERE workspace=?)''',(s,)) or {}
+        r.update({'connected':bool(self.cfg.qq_bot_secret and self.cfg.qq_workspace==s),'coverage_note':'仅代表已接收事件，不代表平台历史消息完整'})
+        return r
+
+    def _qq_signature_ok(self,body,q):
+        if not self.cfg.qq_require_signature:return True
+        secret=self.cfg.qq_bot_secret;sig=q.get('_signature_ed25519','');ts=q.get('_signature_timestamp','')
+        if not secret or not sig or not ts:return False
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+            seed=(secret*((32//len(secret))+1)).encode()[:32]
+            # QQ derives an Ed25519 key from the repeated Bot Secret.
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            public=Ed25519PrivateKey.from_private_bytes(seed).public_key()
+            public.verify(bytes.fromhex(sig),(ts+json.dumps(body,ensure_ascii=False,separators=(',',':'))).encode())
+            return True
+        except Exception:return False
+
+    def qq_ingest(self,b,q):
+        require(self.cfg.qq_ingest_token and hmac.compare_digest(q.get('_ingest_token',''),self.cfg.qq_ingest_token),'UNAUTHORIZED','QQ 内部接入令牌无效',401)
+        require(self.cfg.qq_workspace,'QQ_NOT_CONFIGURED','未配置 QQ 工作区',503)
+        require(isinstance(b,dict),'INVALID_EVENT','QQ 消息格式不正确')
+        group=text(b.get('group_key'),'group_key',200);content=text(b.get('content'),'content',20000)
+        event_id=text(str(b.get('event_id') or uid('qq')),'event_id',300)
+        mid='qq_'+hashlib.sha256((group+'|'+event_id).encode()).hexdigest()[:24]
+        self._ensure_group(self.cfg.qq_workspace,group,group,'qq_websocket',True)
+        meta={'source':'qq_websocket','platform_message_id':event_id}
+        sent=timestamp(b.get('sent_at')) if b.get('sent_at') else None
+        self.store.db.execute('INSERT OR IGNORE INTO messages VALUES(?,?,?,?,?,?,?,?,?)',(mid,self.cfg.qq_workspace,'qq_'+event_id,group,content,sent,now(),dump(meta),1))
+        row=self.message(self.cfg.qq_workspace,mid);self.search.index(self.store,row)
+        self.store.db.execute('UPDATE groups SET last_received=?,last_event_id=?,updated=? WHERE workspace=? AND group_key=?',(now(),event_id,now(),self.cfg.qq_workspace,group))
+        self.store.db.execute('INSERT OR REPLACE INTO sync_events VALUES(?,?,?,?,?,?,?)',(event_id,'qq_websocket',group,now(),'accepted',mid,None))
+        return {'accepted':True,'message_id':mid,'event_id':event_id,'group_key':group}
+
+    def qq_webhook(self,b,q):
+        require(self.cfg.qq_workspace,'QQ_NOT_CONFIGURED','未配置 QQ 工作区',503)
+        require(self._qq_signature_ok(b,q),'INVALID_SIGNATURE','QQ 回调签名无效',401)
+        d=b.get('d') if isinstance(b,dict) else None;require(isinstance(d,dict),'INVALID_EVENT','QQ 事件格式不正确')
+        op=b.get('op');
+        if op in (13,):
+            plain=str(d.get('plain_token',''));require(plain,'INVALID_EVENT','QQ challenge 缺少 plain_token')
+            try:
+                from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+                seed=(self.cfg.qq_bot_secret*((32//len(self.cfg.qq_bot_secret))+1)).encode()[:32]
+                signature=Ed25519PrivateKey.from_private_bytes(seed).sign((str(b.get('ts') or q.get('_signature_timestamp',''))+plain).encode()).hex()
+            except Exception: raise ApiError(503,'QQ_CRYPTO_UNAVAILABLE','无法生成 QQ challenge 签名')
+            return {'plain_token':plain,'signature':signature}
+        group=d.get('group_openid') or d.get('group_id');content=d.get('content');eid=d.get('id') or uid('qq')
+        require(group and isinstance(content,str),'INVALID_EVENT','QQ 群事件缺少群标识或文本')
+        self._ensure_group(self.cfg.qq_workspace,group,group,'qq_official',True)
+        sent=d.get('timestamp') or now();mid='qq_'+hashlib.sha256((str(group)+'|'+str(eid)).encode()).hexdigest()[:24]
+        try:
+            r=self.validate_message(self.cfg.qq_workspace,{'content':content,'group_label':group,'sent_at':sent,'metadata':{'source':'qq_official','platform_message_id':str(eid)}})
+            self.store.db.execute('INSERT OR IGNORE INTO messages VALUES(?,?,?,?,?,?,?,?,?)',(mid,self.cfg.qq_workspace,'qq_'+str(eid),group,r['content'],r['sent_at'],now(),dump(r['metadata']),1))
+            self.search.index(self.store,self.message(self.cfg.qq_workspace,mid))
+            self.store.db.execute('INSERT OR REPLACE INTO sync_events VALUES(?,?,?,?,?,?,?)',(str(eid),'qq_official',group,now(),'accepted',mid,None))
+        except Exception as e:
+            self.store.db.execute('INSERT OR REPLACE INTO sync_events VALUES(?,?,?,?,?,?,?)',(str(eid),'qq_official',group,now(),'error',None,type(e).__name__))
+            raise
+        return {'accepted':True,'message_id':mid,'group_key':group,'event_id':str(eid),'note':'仅保存平台推送的新消息，历史补齐能力需单独验证'}
     def validate_message(self,s,item,mid=None):
         require(isinstance(item,dict),message='每条消息必须为对象')
         require(set(item)<={'content','group_label','sent_at','metadata'},message='消息包含未知字段')
@@ -135,7 +275,7 @@ class Service:
         group=text(item.get('group_label','未知来源'),'group_label',100)
         sent=timestamp(item.get('sent_at'))
         meta=item.get('metadata',{})
-        require(isinstance(meta,dict) and set(meta)<={'event_key','title','fields','revision_kind','supersedes','source_confirmed'},message='metadata 字段不正确')
+        require(isinstance(meta,dict) and set(meta)<={'event_key','title','fields','revision_kind','supersedes','source_confirmed','source','platform_message_id'},message='metadata 字段不正确')
         if 'event_key' in meta:text(meta['event_key'],'event_key',100)
         if 'title' in meta:text(meta['title'],'title',200)
         require(meta.get('revision_kind','initial') in ('initial','correction','cancellation'),message='revision_kind 不正确')
@@ -175,8 +315,9 @@ class Service:
         for i,item in enumerate(items):
             try:
                 new=self.validate_message(s,item);mid=uid('msg')
+                self._ensure_group(s,new['group_label'],new['group_label'],'import',True)
                 self.store.db.execute('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?)',(mid,s,bid,new['group_label'],new['content'],new['sent_at'],now(),dump(new['metadata']),1))
-                self.search.index(self.store,self.message(s,mid));success.append({'index':i,'message_id':mid,'index_status':'ready'})
+                self.search.index(self.store,self.message(s,mid));self.store.db.execute('UPDATE groups SET last_received=?,updated=? WHERE workspace=? AND group_key=?',(now(),now(),s,new['group_label']));success.append({'index':i,'message_id':mid,'index_status':'ready'})
             except ApiError as e:errors.append({'index':i,'code':e.code,'message':e.message})
         result={'batch_id':bid,'success_count':len(success),'failure_count':len(errors),'items':success,'errors':errors,'replayed':False}
         self.store.db.execute('INSERT INTO batches VALUES(?,?,?,?,?,?)',(bid,s,idem,digest,dump(result),now()))

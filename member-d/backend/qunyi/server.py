@@ -39,6 +39,11 @@ class Handler(BaseHTTPRequestHandler):
                 if len(raw)!=n:raise ValueError()
                 body=json.loads(raw.decode('utf-8'))
             params={k:v[-1] for k,v in parse_qs(parsed.query).items()}
+            if parsed.path=='/v1/webhooks/qq':
+                params['_signature_ed25519']=self.headers.get('X-Signature-Ed25519','')
+                params['_signature_timestamp']=self.headers.get('X-Signature-Timestamp','')
+            if parsed.path=='/v1/internal/qq/messages':
+                params['_ingest_token']=self.headers.get('X-Qunyi-Ingest-Token','')
             status,data=self.server.service.dispatch(self.command,parsed.path,body,self.headers.get('Authorization',''),params)
             self.reply(status,data)
         except (ValueError,UnicodeError,TimeoutError):self.reply(400,{'status':'error','error':{'code':'INVALID_JSON','message':'请求格式不正确'},'request_id':uid('req')})

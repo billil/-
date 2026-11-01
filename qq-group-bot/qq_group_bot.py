@@ -76,6 +76,8 @@ class Settings:
     allowed_groups: frozenset[str]
     database_path: Path
     retention_days: int = 30
+    ingest_url: str = ''
+    ingest_token: str = ''
 
     @property
     def allow_all_groups(self) -> bool:
@@ -119,6 +121,8 @@ class Settings:
             allowed_groups=groups,
             database_path=database_path,
             retention_days=retention_days,
+            ingest_url=os.getenv('QUNYI_INGEST_URL','').strip(),
+            ingest_token=os.getenv('QUNYI_INGEST_TOKEN','').strip(),
         )
 
 
@@ -151,9 +155,10 @@ class MessageStore:
             "CREATE INDEX IF NOT EXISTS idx_messages_group_time "
             "ON messages(group_openid, timestamp)"
         )
+        self.connection.execute("CREATE TABLE IF NOT EXISTS outbox (message_id TEXT PRIMARY KEY, payload TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt REAL NOT NULL DEFAULT 0)")
         self.connection.commit()
 
-    def save(self, message: dict[str, Any], event_type: str) -> bool:
+    def save(self, message: dict[str, Any], event_type: str, enqueue: bool = False) -> bool:
         message_id = str(message.get("id") or "").strip()
         group_openid = str(message.get("group_openid") or "").strip()
         if not message_id or not group_openid:
@@ -182,6 +187,8 @@ class MessageStore:
                 utc_now_iso(),
             ),
         )
+        if cursor.rowcount == 1 and enqueue:
+            self.connection.execute("INSERT INTO outbox(message_id,payload) VALUES(?,?)", (message_id, json.dumps({'message': message, 'event_type': event_type}, ensure_ascii=False)))
         self.connection.commit()
         return cursor.rowcount == 1
 
@@ -192,7 +199,7 @@ class MessageStore:
             timespec="milliseconds"
         )
         cursor = self.connection.execute(
-            "DELETE FROM messages WHERE received_at < ?", (cutoff,)
+            "DELETE FROM messages WHERE received_at < ? AND id NOT IN (SELECT message_id FROM outbox)", (cutoff,)
         )
         self.connection.commit()
         return cursor.rowcount
@@ -285,6 +292,17 @@ class QQGroupBot:
         self._warned_groups: set[str] = set()
 
     async def run(self) -> None:
+        worker = asyncio.create_task(self._outbox_loop())
+        try:
+            await self._run_gateway()
+        finally:
+            worker.cancel()
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
+
+    async def _run_gateway(self) -> None:
         attempt = 0
         while True:
             try:
@@ -440,7 +458,7 @@ class QQGroupBot:
                     group_openid,
                 )
             return
-        inserted = self.store.save(message, event_type)
+        inserted = self.store.save(message, event_type, bool(self.settings.ingest_url and self.settings.ingest_token))
         if inserted:
             LOGGER.info(
                 "已保存群消息：group=%s, message=%s, 当前总数=%s",
@@ -450,6 +468,30 @@ class QQGroupBot:
             )
         else:
             LOGGER.debug("重复消息已忽略：%s", message.get("id"))
+
+    async def _outbox_loop(self) -> None:
+        while True:
+            row = self.store.connection.execute("SELECT message_id,payload,attempts FROM outbox WHERE next_attempt<=? ORDER BY rowid LIMIT 1", (time.time(),)).fetchone()
+            if not row or not (self.settings.ingest_url and self.settings.ingest_token):
+                await asyncio.sleep(2)
+                continue
+            message_id, payload, attempts = row
+            try:
+                item = json.loads(payload)
+                await asyncio.to_thread(self._forward_to_qunyi, item['message'], item['event_type'])
+            except Exception as exc:
+                delay = min(300, 2 ** min(attempts + 1, 8))
+                self.store.connection.execute("UPDATE outbox SET attempts=attempts+1,next_attempt=? WHERE message_id=?", (time.time()+delay, message_id))
+                LOGGER.warning("消息转发失败（%s），将在 %s 秒后重试", type(exc).__name__, delay)
+            else:
+                self.store.connection.execute("DELETE FROM outbox WHERE message_id=?", (message_id,))
+            self.store.connection.commit()
+
+    def _forward_to_qunyi(self, message: dict[str, Any], event_type: str) -> None:
+        body=json.dumps({'group_key':str(message.get('group_openid') or ''),'content':str(message.get('content') or ''),'event_id':str(message.get('id') or ''),'sent_at':message.get('timestamp'),'event_type':event_type},ensure_ascii=False).encode('utf-8')
+        request=urllib.request.Request(self.settings.ingest_url,data=body,headers={'Content-Type':'application/json','X-Qunyi-Ingest-Token':self.settings.ingest_token},method='POST')
+        with urllib.request.urlopen(request,timeout=10) as response:
+            if response.status >= 300: raise BotError(f'群忆后端 HTTP {response.status}')
 
 
 def setup_logging() -> None:
