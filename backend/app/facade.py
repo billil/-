@@ -147,6 +147,7 @@ def retrieve(
         raise TypeError("candidate_provider 必须是可调用对象：receive_filters(dict) -> list")
 
     filters = agent.build_search_filters(parse)
+    filters['_query'] = ' '.join(parse.get('keywords') or [])
     filters["_limit"] = limit  # 附加希望返回的条数，provider 可参考
     results = list(candidate_provider(filters) or [])
 

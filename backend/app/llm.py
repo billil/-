@@ -14,10 +14,17 @@ import os
 import socket
 import urllib.error
 import urllib.request
+from contextvars import ContextVar
 from typing import Any
 
 from .config import LLM_TEMPERATURE, LLM_TIMEOUT
 from .errors import AppError, LLM_TIMEOUT as LLM_TIMEOUT_CODE
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+CALL_STATS = ContextVar('qunyi_b_model_calls', default=None)
 
 
 class LLMFormatError(RuntimeError):
@@ -53,6 +60,8 @@ def _call_llm(messages: list[dict], timeout: float | None = None) -> str:
 
     独立成函数便于测试中 monkeypatch（不发真实网络请求）。
     """
+    stats = CALL_STATS.get()
+    if stats is not None: stats['attempted'] += 1
     base_url, api_key, model = _llm_settings()
     url = (
         base_url
@@ -79,10 +88,12 @@ def _call_llm(messages: list[dict], timeout: float | None = None) -> str:
         method="POST",
     )
 
-    with urllib.request.urlopen(request, timeout=timeout or LLM_TIMEOUT) as resp:
+    with urllib.request.build_opener(_NoRedirect()).open(request, timeout=timeout or LLM_TIMEOUT) as resp:
         body = json.loads(resp.read().decode("utf-8"))
 
-    return body["choices"][0]["message"]["content"]
+    content = body["choices"][0]["message"]["content"]
+    if stats is not None: stats['responses'] += 1
+    return content
 
 
 def chat_json(messages: list[dict]) -> Any:

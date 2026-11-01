@@ -140,7 +140,7 @@ class Service:
         if m=='POST' and p=='/v1/query':
             result=self.query(s,b,rid,start)
             code=result.get('error',{}).get('code')
-            http=503 if code=='MODEL_NOT_CONFIGURED' else 504 if code in ('MODEL_TIMEOUT','QUERY_DEADLINE') else 502 if result['status']=='error' else 200
+            http=503 if code in ('MODEL_NOT_CONFIGURED','B_MODEL_CONFIG_MISMATCH','B_MODULE_UNAVAILABLE') else 504 if code in ('MODEL_TIMEOUT','QUERY_DEADLINE') else 502 if result['status']=='error' else 200
             return http,result
         if m=='GET' and p.startswith('/v1/sessions/'):
             sid=p.split('/')[-1];session=self.session(s,sid)
@@ -395,7 +395,13 @@ class Service:
         ai={'mode':self.cfg.mode,'simulation':self.cfg.mode=='mock','attempted':False,'actual_participation':False,'calls':0,'succeeded':False,'error_code':None}
         trace=[{'tool':'search','count':len(candidates),'search':self.search.name}]
         try:
-            if self.cfg.mode=='live':
+            if os.environ.get('QUNYI_B_INTEGRATION')=='1':
+                from .b_bridge import run
+                ai['attempted']=True
+                result,stats=run(self,s,sid,question,conditions)
+                ai['calls']=stats['attempted'];ai['actual_participation']=bool(stats['responses']);ai['succeeded']=True
+                trace.append({'pipeline':'b_facade','candidate_source':'d_sqlite'})
+            elif self.cfg.mode=='live':
                 result=self.live(s,question,conditions,candidates,ai,trace,start)
             else:result=self.mock(s,question,conditions,candidates)
         except (ProviderError,ApiError) as e:
