@@ -90,6 +90,10 @@ class Service:
         if m=='GET' and p=='/v1/capabilities':
             return 200,{'mode':self.cfg.mode,'simulation':self.cfg.mode=='mock','model_configured':bool(self.cfg.endpoint and self.cfg.model and self.cfg.api_key),'search':self.search.name,'true_semantic_model':False,'workbuddy_certified':False,'max_calls':self.cfg.max_calls}
         if m=='POST' and p=='/v1/imports':return 200,self.imports(s,b)
+        if m=='POST' and p=='/v1/ai/query':
+            from .b_adapter import query, IntegrationError
+            try:return 200,query(self,s,b)
+            except IntegrationError as e:raise ApiError(e.status,e.code,e.message) from e
         if m=='GET' and p=='/v1/groups':return 200,self.groups(s)
         if m=='POST' and p=='/v1/subscriptions':return 200,self.subscribe(s,b)
         if m=='GET' and p=='/v1/subscriptions':return 200,self.subscriptions(s)
