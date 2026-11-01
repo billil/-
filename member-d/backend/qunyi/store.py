@@ -38,7 +38,30 @@ class Store:
         CREATE TABLE IF NOT EXISTS sync_events(id TEXT PRIMARY KEY,source TEXT NOT NULL,
           group_key TEXT,received TEXT,status TEXT NOT NULL,message_id TEXT,error_code TEXT);
         CREATE INDEX IF NOT EXISTS sync_events_group ON sync_events(group_key,received);
+        CREATE TABLE IF NOT EXISTS notification_changes(
+          seq INTEGER PRIMARY KEY AUTOINCREMENT, workspace TEXT NOT NULL,
+          group_key TEXT NOT NULL, message_id TEXT NOT NULL,
+          kind TEXT NOT NULL, changed_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS notification_changes_space_seq ON notification_changes(workspace,seq);
+        CREATE TRIGGER IF NOT EXISTS notification_insert AFTER INSERT ON messages BEGIN
+          INSERT INTO notification_changes(workspace,group_key,message_id,kind,changed_at)
+          VALUES(NEW.workspace,NEW.group_label,NEW.id,'created',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+        END;
+        CREATE TRIGGER IF NOT EXISTS notification_update AFTER UPDATE ON messages BEGIN
+          INSERT INTO notification_changes(workspace,group_key,message_id,kind,changed_at)
+          VALUES(OLD.workspace,OLD.group_label,OLD.id,CASE WHEN OLD.group_label != NEW.group_label THEN 'removed' ELSE 'updated' END,strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+          INSERT INTO notification_changes(workspace,group_key,message_id,kind,changed_at)
+          SELECT NEW.workspace,NEW.group_label,NEW.id,'created',strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE OLD.group_label != NEW.group_label;
+        END;
+        CREATE TRIGGER IF NOT EXISTS notification_delete AFTER DELETE ON messages BEGIN
+          INSERT INTO notification_changes(workspace,group_key,message_id,kind,changed_at)
+          VALUES(OLD.workspace,OLD.group_label,OLD.id,'deleted',strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+        END;
         ''')
+        # One-time backfill for existing databases; do not duplicate it on restart.
+        if not self.one('SELECT version FROM schema_version WHERE version=2'):
+            self.db.execute("INSERT INTO notification_changes(workspace,group_key,message_id,kind,changed_at) SELECT workspace,group_label,id,'created',COALESCE(imported_at,?) FROM messages ORDER BY imported_at,id",(now(),))
+            self.db.execute('INSERT INTO schema_version VALUES(2)')
         self.db.commit()
 
     def rows(self,sql,args=()):return [dict(x) for x in self.db.execute(sql,args).fetchall()]

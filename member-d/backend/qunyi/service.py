@@ -158,7 +158,7 @@ class Service:
         nowv=now()
         self.store.db.execute('''INSERT INTO groups(workspace,group_key,label,source,authorized,last_received,created,updated)
           VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace,group_key) DO UPDATE SET label=excluded.label,source=excluded.source,
-          authorized=excluded.authorized,updated=excluded.updated''',(s,key,label,source,1 if authorized else 0,None,nowv,nowv))
+          updated=excluded.updated''',(s,key,label,source,1 if authorized else 0,None,nowv,nowv))
 
     def groups(self,s):
         rows=self.store.rows('SELECT * FROM groups WHERE workspace=? ORDER BY label,group_key',(s,))
@@ -186,19 +186,30 @@ class Service:
         self.store.db.execute('UPDATE subscriptions SET enabled=0,updated=? WHERE workspace=? AND group_key=?',(now(),s,key))
 
     def _subscribed_groups(self,s):
-        return {r['group_key'] for r in self.store.rows('SELECT group_key FROM subscriptions WHERE workspace=? AND enabled=1',(s,))}
+        return {r['group_key'] for r in self.store.rows('SELECT s.group_key FROM subscriptions s JOIN groups g ON g.workspace=s.workspace AND g.group_key=s.group_key WHERE s.workspace=? AND s.enabled=1 AND g.authorized=1',(s,))}
 
     def notifications(self,s,q):
         groups=self._subscribed_groups(s)
         try:limit=max(1,min(100,int(q.get('limit','50'))));after=q.get('after') or ''
         except (ValueError,TypeError):raise ApiError(400,'INVALID_INPUT','分页参数不正确')
-        if not groups:return {'items':[],'next_cursor':after,'sync':self.sync_status(s)}
-        placeholders=','.join('?'*len(groups));args=[s,*sorted(groups),after]
-        rows=self.store.rows(f'''SELECT * FROM messages WHERE workspace=? AND group_label IN ({placeholders})
-          AND imported_at>? ORDER BY imported_at,id LIMIT ?''',(*args,limit+1))
+        require(isinstance(after,str) and (not after or re.fullmatch(r'n1:[0-9]{1,18}',after)), 'INVALID_CURSOR','旧版或无效游标，请清除游标并重新同步',400)
+        seq=int(after[3:]) if after else 0
+        if not groups:return {'items':[],'next_cursor':after,'has_more':False,'sync':self.sync_status(s)}
+        placeholders=','.join('?'*len(groups));args=[s,*sorted(groups),seq]
+        rows=self.store.rows(f'''SELECT * FROM notification_changes WHERE workspace=? AND group_key IN ({placeholders})
+          AND seq>? ORDER BY seq LIMIT ?''',(*args,limit+1))
         more=len(rows)>limit;rows=rows[:limit]
-        cursor=rows[-1]['imported_at'] if rows else after
-        return {'items':[self.public(r) for r in rows],'next_cursor':cursor,'has_more':more,'sync':self.sync_status(s)}
+        cursor='n1:'+str(rows[-1]['seq']) if rows else after
+        items=[]
+        for change in rows:
+            current=self.store.one('SELECT * FROM messages WHERE workspace=? AND id=? AND group_label=?',(s,change['message_id'],change['group_key']))
+            if current and change['kind'] not in ('deleted','removed'):
+                item=self.public(current)
+                item.update({'change_type':change['kind'],'change_seq':change['seq'],'changed_at':change['changed_at']})
+            else:
+                item={'id':change['message_id'],'group_label':change['group_key'],'change_type':'deleted' if change['kind']=='deleted' else 'removed','change_seq':change['seq'],'changed_at':change['changed_at']}
+            items.append(item)
+        return {'items':items,'next_cursor':cursor,'has_more':more,'sync':self.sync_status(s)}
 
     def ack_notifications(self,s,b):
         require(set(b)<= {'group_key','cursor'} and isinstance(b.get('group_key'),str) and isinstance(b.get('cursor'),str),message='确认游标不正确')
@@ -209,7 +220,7 @@ class Service:
         r=self.store.one('''SELECT max(received) AS last_received,count(*) AS events,
           sum(status='accepted') AS accepted,sum(status='error') AS errors FROM sync_events WHERE group_key IN
           (SELECT group_key FROM groups WHERE workspace=?)''',(s,)) or {}
-        r.update({'connected':bool(self.cfg.qq_bot_secret and self.cfg.qq_workspace==s),'coverage_note':'仅代表已接收事件，不代表平台历史消息完整'})
+        r.update({'connected':None,'connection_status':'unknown','coverage_note':'仅代表已接收事件；未接入机器人心跳，无法判断当前在线状态，也不代表平台历史消息完整'})
         return r
 
     def _qq_signature_ok(self,body,q):
