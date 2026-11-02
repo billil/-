@@ -38,6 +38,14 @@ class Store:
         CREATE TABLE IF NOT EXISTS sync_events(id TEXT PRIMARY KEY,source TEXT NOT NULL,
           group_key TEXT,received TEXT,status TEXT NOT NULL,message_id TEXT,error_code TEXT);
         CREATE INDEX IF NOT EXISTS sync_events_group ON sync_events(group_key,received);
+        CREATE TABLE IF NOT EXISTS tags(id TEXT PRIMARY KEY, workspace TEXT NOT NULL,
+          name TEXT NOT NULL, name_key TEXT NOT NULL, color TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL,
+          UNIQUE(workspace,name_key));
+        CREATE TABLE IF NOT EXISTS message_tags(workspace TEXT NOT NULL,
+          message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE, created TEXT NOT NULL,
+          PRIMARY KEY(workspace,message_id,tag_id));
+        CREATE INDEX IF NOT EXISTS message_tags_by_tag ON message_tags(workspace,tag_id,message_id);
         ''')
         self.db.commit()
 
