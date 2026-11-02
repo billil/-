@@ -38,6 +38,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS sync_events(id TEXT PRIMARY KEY,source TEXT NOT NULL,
           group_key TEXT,received TEXT,status TEXT NOT NULL,message_id TEXT,error_code TEXT);
         CREATE INDEX IF NOT EXISTS sync_events_group ON sync_events(group_key,received);
+        CREATE TABLE IF NOT EXISTS b_sessions(workspace TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(workspace,id));
         ''')
         self.db.commit()
 
@@ -50,6 +51,7 @@ class Store:
     def invalidate(self,workspace):
         # Queries can echo source text: clear all derived conversations, not just links.
         self.db.execute('DELETE FROM turns WHERE workspace=?',(workspace,))
+        self.db.execute('DELETE FROM b_sessions WHERE workspace=?',(workspace,))
         self.db.execute('DELETE FROM sessions WHERE workspace=?',(workspace,))
         # Batch results may contain metadata derived from deleted material.
         self.db.execute('DELETE FROM batches WHERE workspace=?',(workspace,))
