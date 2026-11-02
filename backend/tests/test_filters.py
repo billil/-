@@ -16,6 +16,7 @@ import app.llm as llm_module
 import app.search_hybrid as search_module
 from app.agent import answer_flow, build_search_filters, reset_session
 from app.db import get_conn, init_db
+from app.facade import retrieve
 from app.search_hybrid import hybrid_search
 
 TODAY = "2026-10-21"  # 周三：本周 10-19 ~ 10-25
@@ -334,6 +335,76 @@ def test_soft_boost_keeps_result_set_only_raises_score(db, fake_hits):
 
 
 # ---------------- h. 解析侧 filters 规整 ----------------
+
+
+def test_same_query_category_task_vs_none_changes_candidate_set():
+    """同一句话：category=task 与 None 传给 provider 的 filters 不同，候选集也不同。"""
+    pool = [
+        {
+            "msg_id": "t1",
+            "group_id": "g1",
+            "category": "task",
+            "content": "高数作业周五交",
+            "sender": "学习委员",
+            "send_time": "2026-10-20 10:00:00",
+            "score": 0.8,
+            "sources": ["kw"],
+        },
+        {
+            "msg_id": "e1",
+            "group_id": "g1",
+            "category": "event",
+            "content": "周六团建",
+            "sender": "班长",
+            "send_time": "2026-10-20 10:00:00",
+            "score": 0.8,
+            "sources": ["kw"],
+        },
+    ]
+
+    class RecordingProvider:
+        def __init__(self):
+            self.filters: list[dict] = []
+
+        def __call__(self, filters):
+            self.filters.append(dict(filters))
+            category = filters.get("category")
+            return [
+                dict(row)
+                for row in pool
+                if category is None or row.get("category") == category
+            ]
+
+    provider = RecordingProvider()
+    parse_task = {
+        "keywords": ["作业"],
+        "time": {"type": "none", "start": None, "end": None, "raw": None},
+        "time_field": "event_time",
+        "category": "task",
+        "file_hint": None,
+        "filters": {"explicit": ["category:task"], "vague": []},
+        "ambiguous": None,
+    }
+    parse_any = {
+        "keywords": ["作业"],
+        "time": {"type": "none", "start": None, "end": None, "raw": None},
+        "time_field": "event_time",
+        "category": None,
+        "file_hint": None,
+        "filters": {"explicit": [], "vague": []},
+        "ambiguous": None,
+    }
+
+    out_task = retrieve(parse_task, provider, group_scope=["g1"])
+    out_any = retrieve(parse_any, provider, group_scope=["g1"])
+
+    assert provider.filters[0]["category"] == "task"
+    assert provider.filters[1]["category"] is None
+    task_ids = {r["msg_id"] for r in out_task["results"]}
+    any_ids = {r["msg_id"] for r in out_any["results"]}
+    assert task_ids == {"t1"}
+    assert any_ids == {"t1", "e1"}
+    assert task_ids != any_ids
 
 
 def test_parse_filter_lists_normalized():

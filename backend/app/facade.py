@@ -93,8 +93,7 @@ def analyze_query(
 
     Raises:
         app.errors.LLMFormatError: 大模型返回无法解析的 JSON（已重试一次）。
-        app.errors.AppError: 大模型调用超时或网关拒绝。
-        RuntimeError: LLM_BASE_URL / LLM_MODEL 未配置。
+        app.errors.AppError: 大模型不可用（2003：未配置 / 网关拒绝 / 流式中断）或超时（2001）。
     """
     return agent.parse_query(query, today=today)
 
@@ -123,21 +122,30 @@ def retrieve(
     parse: dict,
     candidate_provider: CandidateProvider,
     limit: int = TOP_K_DEFAULT,
+    group_scope: Optional[list[str]] = None,
+    allowed_msg_ids: Optional[list[str]] = None,
 ) -> dict:
     """按 parse 构造检索 filters，调用 candidate_provider 拉候选。
 
     facade 不直接查业务表：filters 由 build_search_filters(parse) 生成，
     candidate_provider 内部决定怎么用这些 filters（SQLite FTS / MySQL / 向量库均可）。
     limit 作为"希望返回的候选数"传给 provider；provider 可以自行决定截断策略
-    （关键词 / 向量融合、阈值过滤等），facade 不做二次过滤。
+    （关键词 / 向量融合、阈值过滤等），facade 不做跨群扩召回。
+
+    T2 权限契约：group_scope（用户可见群列表）与 allowed_msg_ids（消息白名单）
+    至少必须提供一个；两者都缺时视为无权限，直接返回 permission_denied，
+    不会把"没有权限"当成"可以查全量"。provider 返回的越权候选一律丢弃并计数。
 
     Args:
         parse: analyze_query / revise 的返回。
         candidate_provider: 接收 filters dict、返回 list[CandidateResult] 的 callable。
         limit: 希望返回的最大候选数（默认 TOP_K_DEFAULT）。
+        group_scope: D 授权的群列表；候选 group_id 不在其中即丢弃。
+        allowed_msg_ids: D 授权的消息白名单；候选 msg_id 不在其中即丢弃。
 
     Returns:
-        {"results": list[CandidateResult], "debug": dict}，debug 仅在 settings.DEBUG 时填充。
+        {"status": "ok" | "permission_denied", "results": list[CandidateResult],
+         "message": str, "debug": dict}；debug 仅在 settings.DEBUG 时填充。
 
     Raises:
         TypeError: candidate_provider 不是可调用对象。
@@ -146,12 +154,48 @@ def retrieve(
     if not callable(candidate_provider):
         raise TypeError("candidate_provider 必须是可调用对象：receive_filters(dict) -> list")
 
+    if group_scope is None and allowed_msg_ids is None:
+        payload: dict[str, Any] = {
+            "status": agent.STATUS_PERMISSION_DENIED,
+            "results": [],
+            "message": agent.MESSAGE_PERMISSION_DENIED,
+        }
+        _maybe_debug(payload, {"permission": "missing_group_scope_and_allowed_msg_ids"})
+        return payload
+
     filters = agent.build_search_filters(parse)
     filters["_limit"] = limit  # 附加希望返回的条数，provider 可参考
-    results = list(candidate_provider(filters) or [])
+    filters["group_scope"] = list(group_scope) if group_scope is not None else None
+    filters["allowed_msg_ids"] = (
+        list(allowed_msg_ids) if allowed_msg_ids is not None else None
+    )
+    raw_results = list(candidate_provider(filters) or [])
 
-    payload: dict[str, Any] = {"results": results}
-    _maybe_debug(payload, {"filters": filters, "count": len(results)})
+    scope = set(group_scope) if group_scope is not None else None
+    allowed = set(allowed_msg_ids) if allowed_msg_ids is not None else None
+    results: list[CandidateResult] = []
+    dropped_out_of_scope = 0
+    dropped_not_allowed = 0
+    for candidate in raw_results:
+        # 缺 group_id 视为无法确认授权范围，按越权丢弃
+        if scope is not None and candidate.get("group_id") not in scope:
+            dropped_out_of_scope += 1
+            continue
+        if allowed is not None and candidate.get("msg_id") not in allowed:
+            dropped_not_allowed += 1
+            continue
+        results.append(candidate)
+
+    payload = {"status": "ok", "results": results, "message": ""}
+    _maybe_debug(
+        payload,
+        {
+            "filters": filters,
+            "count": len(results),
+            "dropped_out_of_scope": dropped_out_of_scope,
+            "dropped_not_allowed": dropped_not_allowed,
+        },
+    )
     return payload
 
 
@@ -159,6 +203,8 @@ def build_answer(
     parse: dict,
     candidates: list[dict],
     db_path: Optional[str] = None,
+    group_scope: Optional[list[str]] = None,
+    allowed_msg_ids: Optional[list[str]] = None,
 ) -> AnswerResult:
     """把 parse 与候选消息交给大模型生成答案。
 
@@ -166,6 +212,8 @@ def build_answer(
         parse: analyze_query / revise 的返回。
         candidates: retrieve 的 results，至少每条要有 msg_id / content。
         db_path: 业务库路径（仅供 load_clusters 抽 leads 用，可传 None 则跳过事件关联）。
+        group_scope: 本次授权群列表，继续透传给 validate_answer 做 L3 归属校验。
+        allowed_msg_ids: 本次授权消息白名单，继续透传给 validate_answer 做 L3 校验。
 
     Returns:
         dict，关键字段：
@@ -187,6 +235,8 @@ def build_answer(
         candidates,
         assumptions,
         clusters,
+        group_scope=group_scope,
+        allowed_msg_ids=allowed_msg_ids,
     )
     # 把 clusters 一并附带，D 如需结构化事件列表可直接读
     if isinstance(result, dict):
@@ -202,6 +252,8 @@ def process(
     db_path: Optional[str] = None,
     today: Optional[str] = None,
     limit: int = TOP_K_DEFAULT,
+    group_scope: Optional[list[str]] = None,
+    allowed_msg_ids: Optional[list[str]] = None,
 ) -> dict:
     """端到端流程：解析 → 必要时追问一次 → 更正判定 → 检索 → 答案生成 → 会话写回。
 
@@ -217,16 +269,20 @@ def process(
         db_path: 业务库路径（仅供 load_clusters 抽 leads 用，可传 None 则跳过事件关联）。
         today: 当天日期 YYYY-MM-DD，默认当天。
         limit: 希望返回的候选数。
+        group_scope: D 授权的群列表（与 allowed_msg_ids 至少提供一个）。
+        allowed_msg_ids: D 授权的消息白名单；两者都缺时直接返回 permission_denied，
+            且在解析前返回，不调用大模型。
 
     Returns:
         统一响应结构：
         {
-            "status": "answer" | "ask" | "no_result" | "low_relevance" | "uncertain" | "degraded",
+            "status": "answer" | "ask" | "no_data" | "low_relevance" |
+                      "uncertain" | "retrieval_degraded" | "permission_denied",
             "parse": {...},
             "answer": {...} | None,
             "evidence": [...],
             "debug": {...},        # 仅 settings.DEBUG=true 时填充
-            "suggestions": [...], # 仅 no_result 时
+            "suggestions": [...], # 仅 no_data 时
             "assumptions": [...], # 有模糊字段时
             "context_lost": bool, # 会话过期但用户明显在更正时为 True
         }
@@ -237,6 +293,18 @@ def process(
     from datetime import date
 
     today = today or date.today().isoformat()
+
+    # T2 权限前置：没有 D 授权范围时立即拒绝，不解析、不检索、不调用大模型
+    if group_scope is None and allowed_msg_ids is None:
+        payload: dict[str, Any] = {
+            "status": agent.STATUS_PERMISSION_DENIED,
+            "parse": {},
+            "answer": None,
+            "evidence": [],
+            "message": agent.MESSAGE_PERMISSION_DENIED,
+        }
+        _maybe_debug(payload, {"permission": "missing_group_scope_and_allowed_msg_ids"})
+        return payload
 
     session_obj = _dict_to_session(session)
     ask_count = session_obj.ask_count if session_obj else 0
@@ -251,7 +319,7 @@ def process(
         _save(store, session_obj, status=agent.STATUS_ANSWERED, parse=parse, ask_count=ask_count)
         return _retrieve_and_answer(
             parse, query, assumptions, candidate_provider, store, session_obj,
-            db_path, limit, context_lost,
+            db_path, limit, context_lost, group_scope, allowed_msg_ids,
         )
 
     # 2) 更正：会话里有最新 parse，按更正语句替换字段
@@ -261,7 +329,7 @@ def process(
         return _retrieve_and_answer(
             parse, " ".join(parse.get("keywords") or []) or query,
             [], candidate_provider, store, session_obj,
-            db_path, limit, context_lost,
+            db_path, limit, context_lost, group_scope, allowed_msg_ids,
         )
 
     # 3) 新查询
@@ -298,7 +366,7 @@ def process(
     )
     return _retrieve_and_answer(
         parse, query, assumptions, candidate_provider, store, session_obj,
-        db_path, limit, context_lost,
+        db_path, limit, context_lost, group_scope, allowed_msg_ids,
     )
 
 
@@ -317,9 +385,32 @@ def _retrieve_and_answer(
     db_path: Optional[str],
     limit: int,
     context_lost: bool,
+    group_scope: Optional[list[str]] = None,
+    allowed_msg_ids: Optional[list[str]] = None,
 ) -> dict:
     """retrieve + build_answer 的内部组合；process() 中多处复用。"""
-    retrieval = retrieve(parse, candidate_provider, limit=limit)
+    retrieval = retrieve(
+        parse,
+        candidate_provider,
+        limit=limit,
+        group_scope=group_scope,
+        allowed_msg_ids=allowed_msg_ids,
+    )
+    # 理论上 process 已在入口拦截缺权限；这里兜底，确保越权路径不会调用大模型
+    if retrieval.get("status") == agent.STATUS_PERMISSION_DENIED:
+        payload: dict[str, Any] = {
+            "status": agent.STATUS_PERMISSION_DENIED,
+            "parse": parse,
+            "assumptions": assumptions,
+            "answer": None,
+            "evidence": [],
+            "message": agent.MESSAGE_PERMISSION_DENIED,
+        }
+        _maybe_debug(payload, retrieval.get("debug") or {})
+        if context_lost:
+            payload["context_lost"] = True
+        return payload
+
     candidates = retrieval.get("results") or []
 
     # candidate_provider 可以自己实现阈值过滤与 low_relevance 标记；
@@ -328,8 +419,8 @@ def _retrieve_and_answer(
     degraded = bool(any(c.get("degraded") for c in candidates)) or bool(retrieval.get("debug", {}).get("degraded"))
 
     if not candidates:
-        payload: dict[str, Any] = {
-            "status": "no_result",
+        payload = {
+            "status": agent.STATUS_NO_DATA,
             "parse": parse,
             "assumptions": assumptions,
             "suggestions": list(agent.NO_RESULT_SUGGESTIONS),
@@ -338,34 +429,46 @@ def _retrieve_and_answer(
         }
         _maybe_debug(payload, retrieval.get("debug") or {})
         if degraded:
-            payload["status"] = "degraded"
+            # 降级时不能冒充 no_data：状态与文案都必须是 retrieval_degraded
+            payload["status"] = agent.STATUS_RETRIEVAL_DEGRADED
+            payload["degraded"] = True
             payload["degraded_reason"] = retrieval.get("debug", {}).get("degraded_reason")
-            payload["message"] = "本次仅使用关键词检索，结果可能不完整"
+            payload["message"] = agent.MESSAGE_RETRIEVAL_DEGRADED
         else:
-            payload["message"] = "群里没有找到相关资料"
+            payload["message"] = agent.MESSAGE_NO_DATA
         if context_lost:
             payload["context_lost"] = True
         return payload
 
     if all_low:
         payload = {
-            "status": "low_relevance",
+            "status": agent.STATUS_LOW_RELEVANCE,
             "parse": parse,
             "assumptions": assumptions,
             "low_confidence": True,
-            "message": "没有找到明确匹配，这几个可能相关",
+            "message": agent.MESSAGE_LOW_RELEVANCE,
             "answer": None,
             "evidence": [
                 {"msg_id": c.get("msg_id"), "quote": (c.get("content") or "")[:80]}
                 for c in candidates
             ],
         }
+        if degraded:
+            payload["degraded"] = True
+            payload["degraded_reason"] = retrieval.get("debug", {}).get("degraded_reason")
+            payload["message"] += "；" + agent.MESSAGE_RETRIEVAL_DEGRADED
         _maybe_debug(payload, retrieval.get("debug") or {})
         if context_lost:
             payload["context_lost"] = True
         return payload
 
-    result = build_answer(parse, candidates, db_path=db_path)
+    result = build_answer(
+        parse,
+        candidates,
+        db_path=db_path,
+        group_scope=group_scope,
+        allowed_msg_ids=allowed_msg_ids,
+    )
     answer_status = (result or {}).get("status", "ok")
 
     if answer_status == "uncertain":
@@ -379,17 +482,19 @@ def _retrieve_and_answer(
         }
     elif answer_status == "no_result":
         payload = {
-            "status": "no_result",
+            "status": agent.STATUS_RETRIEVAL_DEGRADED if degraded else agent.STATUS_NO_DATA,
             "parse": parse,
             "assumptions": assumptions,
-            "message": "群里没有找到相关资料",
+            "message": (
+                agent.MESSAGE_RETRIEVAL_DEGRADED if degraded else agent.MESSAGE_NO_DATA
+            ),
             "suggestions": list(agent.NO_RESULT_SUGGESTIONS),
             "answer": result,
             "evidence": [],
         }
     else:
         payload = {
-            "status": "degraded" if degraded else "answer",
+            "status": agent.STATUS_RETRIEVAL_DEGRADED if degraded else "answer",
             "parse": parse,
             "assumptions": assumptions,
             "message": ("说明：" + "；".join(assumptions)) if assumptions else "",
@@ -397,11 +502,12 @@ def _retrieve_and_answer(
             "evidence": (result or {}).get("evidence") or [],
         }
         if degraded:
+            payload["degraded"] = True
             payload["degraded_reason"] = retrieval.get("debug", {}).get("degraded_reason")
             payload["message"] = (
-                payload["message"] + "；本次仅使用关键词检索，结果可能不完整"
+                payload["message"] + "；" + agent.MESSAGE_RETRIEVAL_DEGRADED
                 if payload["message"]
-                else "本次仅使用关键词检索，结果可能不完整"
+                else agent.MESSAGE_RETRIEVAL_DEGRADED
             )
 
     _maybe_debug(payload, retrieval.get("debug") or {})

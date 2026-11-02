@@ -15,6 +15,7 @@ sys.path.insert(0, BASE_DIR)
 from app.db import get_conn, init_db  # noqa: E402
 from app.extract import extract_leads  # noqa: E402
 from app.ingest import import_messages  # noqa: E402
+from app.providers import provider_status  # noqa: E402
 
 
 def _pending_messages() -> list[dict]:
@@ -46,8 +47,12 @@ def main() -> int:
         stats = import_messages(sample, generate_embeddings=False)
     print(f"[2/3] 示例数据导入完成：{stats}")
 
-    if not os.environ.get("LLM_API_KEY") or not os.environ.get("LLM_BASE_URL"):
-        print("[3/3] 未配置 LLM_API_KEY / LLM_BASE_URL，跳过线索抽取（检索仍可用）")
+    status = provider_status()
+    if not status["configured"]:
+        print(
+            f"[3/3] 大模型未配置（provider={status['provider']}，缺少 "
+            f"{'、'.join(status['missing']) or '未知'}），跳过线索抽取（检索仍可用）"
+        )
         return 0
 
     pending = _pending_messages()

@@ -17,11 +17,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pytest
 
 import app.agent as agent_module
+import app.facade as facade_module
 import app.search_hybrid as search_module
 from app.agent import answer_flow, reset_session
 from app.db import init_db
 from app.search import MIN_SCORE_VEC, split_by_threshold
 from app.search_hybrid import hybrid_search
+from app.session import InMemorySessionStore
 
 TODAY = "2026-10-26"
 
@@ -43,10 +45,11 @@ PARSE = {
 
 @pytest.fixture(autouse=True)
 def _clean_sessions():
-    for session_id in ("u5-a", "u5-b", "u5-c", "u5-d"):
+    session_ids = ("u5-a", "u5-b", "u5-c", "u5-d", "u5-deg", "u5-p")
+    for session_id in session_ids:
         reset_session(session_id)
     yield
-    for session_id in ("u5-a", "u5-b", "u5-c", "u5-d"):
+    for session_id in session_ids:
         reset_session(session_id)
 
 
@@ -119,7 +122,7 @@ def test_irrelevant_query_returns_no_data(db, fake_retrieval, monkeypatch):
     _patch_flow(monkeypatch, out, calls)
     response = answer_flow("今天天气怎么样", "u5-a", db_path=db, today=TODAY)
 
-    assert response["status"] == "no_result"
+    assert response["status"] == "no_data"
     assert response["outcome"] == "no_data"
     assert "群里没有找到相关资料" in response["message"]
     assert response["suggestions"]  # 附带可操作建议
@@ -196,6 +199,88 @@ def test_score_equal_to_threshold_is_kept(db, fake_retrieval):
     assert [r["msg_id"] for r in out["results"]] == ["m1"]
     assert out["results"][0]["low_confidence"] is False
     assert out["debug"]["outcome"] == "ok"
+
+
+# ---------------- 四态不互相冒充 ----------------
+
+def test_degraded_without_candidates_is_not_no_data(db, monkeypatch):
+    """向量不可用且无候选 → retrieval_degraded，文案不能说成"没找到"。"""
+    search_out = {
+        "results": [],
+        "debug": {
+            "applied_filters": [],
+            "soft_boost": {},
+            "result_count_before_filter": 0,
+            "result_count_after_filter": 0,
+            "outcome": "retrieval_degraded",
+            "degraded": True,
+            "degraded_reason": "vector_unavailable",
+        },
+    }
+    calls: list = []
+    _patch_flow(monkeypatch, search_out, calls)
+    response = answer_flow("聚餐在哪", "u5-deg", db_path=db, today=TODAY)
+
+    assert response["status"] == "retrieval_degraded"
+    assert response["degraded"] is True
+    assert response["degraded_reason"] == "vector_unavailable"
+    assert response["message"] == agent_module.MESSAGE_RETRIEVAL_DEGRADED
+    assert agent_module.MESSAGE_NO_DATA not in response["message"]
+    assert calls == []  # 没有候选，不调用答案生成
+
+
+def test_four_status_messages_are_distinct():
+    """四态的状态值与用户文案必须彼此不同，禁止互相冒充。"""
+    statuses = {
+        agent_module.STATUS_NO_DATA,
+        agent_module.STATUS_LOW_RELEVANCE,
+        agent_module.STATUS_RETRIEVAL_DEGRADED,
+        agent_module.STATUS_PERMISSION_DENIED,
+    }
+    messages = {
+        agent_module.MESSAGE_NO_DATA,
+        agent_module.MESSAGE_LOW_RELEVANCE,
+        agent_module.MESSAGE_RETRIEVAL_DEGRADED,
+        agent_module.MESSAGE_PERMISSION_DENIED,
+    }
+    assert len(statuses) == 4
+    assert len(messages) == 4
+    assert agent_module.MESSAGE_NO_DATA != agent_module.MESSAGE_RETRIEVAL_DEGRADED
+
+
+def test_permission_denied_does_not_call_llm(monkeypatch):
+    """缺权限参数 → permission_denied，且解析与答案生成都不调用大模型。"""
+    llm_calls: list = []
+    monkeypatch.setattr(
+        agent_module,
+        "parse_query",
+        lambda q, today=None: llm_calls.append(q) or dict(PARSE),
+    )
+    monkeypatch.setattr(
+        agent_module,
+        "generate_answer",
+        lambda *a, **k: llm_calls.append("answer") or {"status": "ok", "answer": ""},
+    )
+
+    class Provider:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, filters):
+            self.calls += 1
+            return []
+
+    provider = Provider()
+    response = facade_module.process(
+        "今天天气怎么样", None, provider, InMemorySessionStore(), today=TODAY
+    )
+
+    assert response["status"] == "permission_denied"
+    assert response["message"] == agent_module.MESSAGE_PERMISSION_DENIED
+    assert response["answer"] is None
+    assert agent_module.MESSAGE_NO_DATA not in response["message"]
+    assert llm_calls == []
+    assert provider.calls == 0
 
 
 # ---------------- 向量熔断 ----------------

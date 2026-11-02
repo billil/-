@@ -48,6 +48,18 @@ NO_RESULT_SUGGESTIONS = [
     "换一个更具体的关键词",
 ]
 
+# T2：查不到的四态与用户可见文案。四种状态各一句，禁止互相冒充
+# （尤其不能把 retrieval_degraded 说成 no_data）。
+STATUS_NO_DATA = "no_data"
+STATUS_LOW_RELEVANCE = "low_relevance"
+STATUS_RETRIEVAL_DEGRADED = "retrieval_degraded"
+STATUS_PERMISSION_DENIED = "permission_denied"
+
+MESSAGE_NO_DATA = "群里没有找到相关资料"
+MESSAGE_LOW_RELEVANCE = "没有找到明确匹配，这几个可能相关"
+MESSAGE_RETRIEVAL_DEGRADED = "本次仅使用关键词检索，结果可能不完整"
+MESSAGE_PERMISSION_DENIED = "没有权限查看这些群聊的消息，请先加入对应群聊"
+
 # 会话状态：默认进程内实现（TTL 30 分钟）；持久化实现由 D 提供，实现 SessionStore 协议即可替换。
 # 全局 SESSION_STORE 仅作向后兼容入口——新接入方请用 app.facade.process，
 # 它支持传入自定义 store 与 candidate_provider，不依赖任何模块级可变状态。
@@ -64,7 +76,7 @@ def _no_result_payload(
 ) -> dict:
     """无结果统一返回结构；不调用大模型编造"假装有结果"的回答。"""
     payload = {
-        "status": "no_result",
+        "status": STATUS_NO_DATA,
         "session_id": session_id,
         "suggestions": list(NO_RESULT_SUGGESTIONS),
     }
@@ -348,6 +360,7 @@ def _split_filter_entries(entries: list[str]) -> dict[str, str]:
 def build_search_filters(parse: dict) -> dict:
     """把解析结果转成检索 filters：explicit 做硬过滤，vague 只做软加权。
 
+    - keywords：解析出的查询词，原样交给 provider（7.1）
     - category / file_hint：用户明确说出（或在无模糊表述时解析出）→ 硬过滤；
       只有模糊表述时 → 放进 soft_boost
     - time_range：有明确时间区间且未被标为模糊 → 硬过滤
@@ -368,6 +381,8 @@ def build_search_filters(parse: dict) -> dict:
         time_field = "event_time"
 
     filters: dict = {
+        # 7.1：查询词必须传给 provider，否则 D 只能用时间/类别过滤，无法按问题检索
+        "keywords": list(parse.get("keywords") or [])[:8],
         "category": None,
         "file_hint": None,
         "time_range": None,
@@ -476,7 +491,7 @@ def _run_search_and_answer(
     outcome = search_debug.get("outcome") or "ok"
     degraded = bool(search_debug.get("degraded"))
     degraded_reason = search_debug.get("degraded_reason")
-    degraded_note = "本次仅使用关键词检索，结果可能不完整" if degraded else ""
+    degraded_note = MESSAGE_RETRIEVAL_DEGRADED if degraded else ""
 
     def _tag(payload: dict) -> dict:
         """统一附加 outcome 与降级标记，保证最终响应可区分三分状态。"""
@@ -497,9 +512,12 @@ def _run_search_and_answer(
             )
         )
         payload = _no_result_payload(session_id, search_debug=search_debug)
-        payload["message"] = "群里没有找到相关资料"
-        if degraded_note:
-            payload["message"] += "；" + degraded_note
+        # 降级与"确实没数据"必须区分：降级时只说明降级，不冒充 no_data
+        if degraded:
+            payload["status"] = STATUS_RETRIEVAL_DEGRADED
+            payload["message"] = MESSAGE_RETRIEVAL_DEGRADED
+        else:
+            payload["message"] = MESSAGE_NO_DATA
         payload = _tag(payload)
         if context_lost:
             payload["context_lost"] = True
@@ -517,9 +535,9 @@ def _run_search_and_answer(
             )
         )
         payload = {
-            "status": "low_relevance",
+            "status": STATUS_LOW_RELEVANCE,
             "session_id": session_id,
-            "message": "没有找到明确匹配，这几个可能相关",
+            "message": MESSAGE_LOW_RELEVANCE,
             "low_confidence": True,
             "assumptions": assumptions,
             "candidates": candidates,
@@ -570,16 +588,18 @@ def _run_search_and_answer(
     if result.get("status") == "no_result":
         # 检索有候选但答案校验全部失败：同样按无结果返回，并保留本次检索状态
         payload = _no_result_payload(session_id, result)
-        payload["message"] = "群里没有找到相关资料"
-        if degraded_note:
-            payload["message"] += "；" + degraded_note
+        if degraded:
+            payload["status"] = STATUS_RETRIEVAL_DEGRADED
+            payload["message"] = MESSAGE_RETRIEVAL_DEGRADED
+        else:
+            payload["message"] = MESSAGE_NO_DATA
         payload = _tag(payload)
         if context_lost:
             payload["context_lost"] = True
         return payload
 
     payload = {
-        "status": "answer",
+        "status": STATUS_RETRIEVAL_DEGRADED if degraded else "answer",
         "session_id": session_id,
         "message": ("说明：" + "；".join(assumptions)) if assumptions else "",
         "assumptions": assumptions,

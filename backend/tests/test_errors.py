@@ -167,7 +167,7 @@ def test_unknown_exception_internal_error():
 
 
 def test_no_result_suggestions(monkeypatch):
-    """hybrid_search 为空 → no_result + 建议，且不调用大模型生成答案。"""
+    """hybrid_search 为空 → no_data + 建议，且不调用大模型生成答案。"""
 
     class FakeLLM:
         def __init__(self):
@@ -195,7 +195,7 @@ def test_no_result_suggestions(monkeypatch):
 
     response = answer_flow("上周的火锅局", "e1", today="2026-10-25")
 
-    assert response["status"] == "no_result"
+    assert response["status"] == "no_data"
     assert response["session_id"] == "e1"
     assert response["suggestions"] == agent_module.NO_RESULT_SUGGESTIONS
     assert len(response["suggestions"]) == 3
@@ -204,7 +204,7 @@ def test_no_result_suggestions(monkeypatch):
 
 
 def test_no_result_when_quotes_all_dropped(monkeypatch):
-    """引用全部被剔除 → no_result + 建议，不透出模型编造结论。"""
+    """引用全部被剔除 → no_data + 建议，不透出模型编造结论。"""
 
     class FakeLLM:
         def __init__(self):
@@ -237,7 +237,7 @@ def test_no_result_when_quotes_all_dropped(monkeypatch):
 
     response = answer_flow("上周的火锅局", "e1", today="2026-10-25")
 
-    assert response["status"] == "no_result"
+    assert response["status"] == "no_data"
     assert response["suggestions"] == agent_module.NO_RESULT_SUGGESTIONS
     assert response["result"]["status"] == "no_result"
     assert response["result"]["events"] == []

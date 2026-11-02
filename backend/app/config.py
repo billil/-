@@ -21,7 +21,9 @@ RRF_K = int(os.environ.get("RRF_K", "60"))
 EXTRACT_BATCH_SIZE = int(os.environ.get("EXTRACT_BATCH_SIZE", "20"))
 
 # ---- 大模型调用 ----
-# 地址/密钥/模型名由 llm.py 在每次调用时从环境变量读取（LLM_BASE_URL / LLM_API_KEY / LLM_MODEL）
+# 上游由 LLM_PROVIDER 选择（openai / workbuddy），具体配置项在 app/providers.py 每次调用时读取：
+#   openai    -> LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+#   workbuddy -> WB_ENDPOINT / WB_PUBLISHABLE_KEY / WB_MODEL（WB_ORIGIN 可选）
 LLM_TIMEOUT = float(os.environ.get("LLM_TIMEOUT", "30"))
 LLM_TEMPERATURE = 0
 

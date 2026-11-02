@@ -41,6 +41,7 @@ MOCK_CANDIDATES = [
         "content": "这周六团建，下午6点在南门集合",
         "sender": "班长",
         "send_time": "2026-10-20 10:00:00",
+        "group_id": "g1",
         "score": 0.82,
         "sources": ["kw", "vec"],
     },
@@ -49,6 +50,7 @@ MOCK_CANDIDATES = [
         "content": "高数作业周五晚上8点前交",
         "sender": "学习委员",
         "send_time": "2026-10-21 09:00:00",
+        "group_id": "g1",
         "score": 0.10,
         "sources": ["kw"],
     },
@@ -109,7 +111,7 @@ PARSE_AFTER_CORRECTION = {
 }
 
 
-def _fake_generate_answer(query, candidates, assumptions, clusters):
+def _fake_generate_answer(query, candidates, assumptions, clusters, **kwargs):
     return {
         "status": "ok",
         "answer": f"群里提到 {query} 在周日南门集合",
@@ -189,12 +191,14 @@ def test_revise_updates_parse():
 
 
 def test_retrieve_passes_filters_to_provider(provider):
-    out = retrieve(dict(PARSE_NORMAL), provider, limit=5)
+    out = retrieve(dict(PARSE_NORMAL), provider, limit=5, group_scope=["g1"])
+    assert out["status"] == "ok"
     assert out["results"] == MOCK_CANDIDATES
     assert out["debug"]["count"] == 2
     filters = provider.last_filters
     assert filters["category"] == "event"
     assert filters["_limit"] == 5
+    assert filters["group_scope"] == ["g1"]
 
 
 def test_retrieve_rejects_non_callable():
@@ -222,6 +226,7 @@ def test_process_answer_path(provider, store):
         provider,
         store,
         today=TODAY,
+        group_scope=["g1"],
     )
 
     assert response["status"] == "answer"
@@ -247,6 +252,7 @@ def test_process_ask_path(provider, store, monkeypatch):
         provider,
         store,
         today=TODAY,
+        group_scope=["g1"],
     )
 
     assert response["status"] == "ask"
@@ -260,11 +266,13 @@ def test_process_ask_path(provider, store, monkeypatch):
 
 
 def test_process_no_result_path(provider, store):
-    """provider 返回空列表 → no_result + suggestions。"""
+    """provider 返回空列表且未降级 → no_data + suggestions。"""
     provider.set([])
-    response = process("不存在的关键词", None, provider, store, today=TODAY)
+    response = process(
+        "不存在的关键词", None, provider, store, today=TODAY, group_scope=["g1"]
+    )
 
-    assert response["status"] == "no_result"
+    assert response["status"] == "no_data"
     assert response["message"] == "群里没有找到相关资料"
     assert response["suggestions"]
     assert response["answer"] is None
@@ -275,7 +283,9 @@ def test_process_uncertain_path(provider, store, monkeypatch):
     """有候选但 generate_answer 返回 uncertain。"""
     monkeypatch.setattr(agent_mod, "generate_answer", _fake_generate_uncertain)
 
-    response = process("这次活动的时间对不上", None, provider, store, today=TODAY)
+    response = process(
+        "这次活动的时间对不上", None, provider, store, today=TODAY, group_scope=["g1"]
+    )
 
     assert response["status"] == "uncertain"
     assert response["message"].startswith("现有原文能对上")
@@ -284,21 +294,15 @@ def test_process_uncertain_path(provider, store, monkeypatch):
 
 
 def test_process_degraded_path(provider, store, monkeypatch):
-    """retrieve 的 debug 带 degraded 标记 → status=degraded。"""
+    """retrieve 的 debug 带 degraded 标记 → status=retrieval_degraded。"""
     import app.facade as facade_mod
 
-    def _retrieve_with_degraded(parse, candidate_provider, limit=5):
-        out = facade_mod.retrieve.__wrapped__(parse, candidate_provider, limit=limit) if hasattr(facade_mod.retrieve, "__wrapped__") else facade_mod.retrieve(parse, candidate_provider, limit=limit)
-        out.setdefault("debug", {})
-        out["debug"]["degraded"] = True
-        out["debug"]["degraded_reason"] = "vector_unavailable"
-        return out
-
-    # 更直接的做法：monkeypatch retrieve 本身（不 __wrapped__）
     original_retrieve = facade_mod.retrieve
 
-    def _fake_retrieve(parse, candidate_provider, limit=5):
-        out = original_retrieve(parse, candidate_provider, limit=limit)
+    def _fake_retrieve(parse, candidate_provider, limit=5, **kwargs):
+        out = original_retrieve(
+            parse, candidate_provider, limit=limit, **kwargs
+        )
         out.setdefault("debug", {})
         out["debug"]["degraded"] = True
         out["debug"]["degraded_reason"] = "vector_unavailable"
@@ -306,8 +310,11 @@ def test_process_degraded_path(provider, store, monkeypatch):
 
     monkeypatch.setattr(facade_mod, "retrieve", _fake_retrieve)
 
-    response = process("团建", None, provider, store, today=TODAY)
-    assert response["status"] == "degraded"
+    response = process(
+        "团建", None, provider, store, today=TODAY, group_scope=["g1"]
+    )
+    assert response["status"] == "retrieval_degraded"
+    assert response["degraded"] is True
     assert response["degraded_reason"] == "vector_unavailable"
     assert "本次仅使用关键词检索" in response["message"]
 
@@ -331,6 +338,7 @@ def test_process_revise_path(provider, store):
         provider,
         store,
         today=TODAY,
+        group_scope=["g1"],
     )
 
     assert response["status"] == "answer"

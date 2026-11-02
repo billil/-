@@ -7,6 +7,8 @@
 EMPTY_QUERY = 1001
 LLM_TIMEOUT = 2001
 LLM_FORMAT_ERROR = 2002
+# 大模型不可用：未配置 provider、网关拒绝（凭据/额度/模型下线）、流式响应中断
+LLM_UNAVAILABLE = 2003
 DB_ERROR = 3001
 GUARD_REJECTED = 4001
 INTERNAL_ERROR = 5000
@@ -16,6 +18,7 @@ MESSAGES = {
     EMPTY_QUERY: "查询内容为空，请输入你想查找的内容",
     LLM_TIMEOUT: "大模型服务响应超时，请稍后重试",
     LLM_FORMAT_ERROR: "大模型返回内容格式异常，已重试仍失败",
+    LLM_UNAVAILABLE: "大模型服务暂不可用，请稍后重试",
     DB_ERROR: "数据库操作失败，请稍后重试",
     GUARD_REJECTED: "内容未通过安全校验，请调整后重试",
     INTERNAL_ERROR: "服务内部错误，请稍后重试",
@@ -26,6 +29,7 @@ HTTP_STATUS = {
     EMPTY_QUERY: 400,
     LLM_TIMEOUT: 504,
     LLM_FORMAT_ERROR: 502,
+    LLM_UNAVAILABLE: 503,
     DB_ERROR: 500,
     GUARD_REJECTED: 400,
     INTERNAL_ERROR: 500,

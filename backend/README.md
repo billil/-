@@ -45,11 +45,18 @@ pip install -r requirements.txt
 
 ## 2. 环境变量
 
+大模型有两条通路，用 `LLM_PROVIDER` 选择；两套变量都只在**调用时**读取，改完重启服务即可。
+
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
-| `LLM_BASE_URL` | 是（AI 功能） | 无 | OpenAI 兼容接口地址，如 `https://api.deepseek.com/v1` |
-| `LLM_API_KEY` | 是（AI 功能） | 无 | 密钥 |
-| `LLM_MODEL` | 是（AI 功能） | 无 | 模型名，如 `deepseek-chat` |
+| `LLM_PROVIDER` | 否 | `openai` | `openai`=任意 OpenAI 兼容接口；`workbuddy`=WorkBuddy 云服务免密钥网关 |
+| `LLM_BASE_URL` | provider=openai 时必填 | 无 | OpenAI 兼容接口地址，如 `https://api.deepseek.com/v1` |
+| `LLM_API_KEY` | provider=openai 时必填 | 无 | 密钥 |
+| `LLM_MODEL` | provider=openai 时必填 | 无 | 模型名，如 `deepseek-chat`；workbuddy 下作为 `WB_MODEL` 的兜底 |
+| `WB_ENDPOINT` | provider=workbuddy 时必填 | 无 | 云服务应用的发布域名，如 `https://xxx.workbuddy.link` |
+| `WB_PUBLISHABLE_KEY` | provider=workbuddy 时必填 | 无 | 云服务 `publicConfig.publishableKey`（本身不带权限，服务端按 Origin 校验） |
+| `WB_MODEL` | provider=workbuddy 时必填 | 取 `LLM_MODEL` | 模型 id，取自 `GET /.cloud/llm/models` |
+| `WB_ORIGIN` | 否 | endpoint 的 `协议://域名` | 网关按 Origin 精确匹配校验时使用，一般不用改 |
 | `LLM_TIMEOUT` | 否 | `30` | 单次大模型调用超时（秒） |
 | `EMBED_MODEL` | 否 | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | 语义检索模型 |
 | `EMBED_BATCH_SIZE` | 否 | `64` | 向量化批大小 |
@@ -58,7 +65,11 @@ pip install -r requirements.txt
 | `MEMORY_DB_PATH` | 否 | `backend/memory.db` | SQLite 文件路径 |
 | `HF_ENDPOINT` | 否 | 无 | 国内下载模型建议设为 `https://hf-mirror.com` |
 
-未配置 `LLM_BASE_URL` / `LLM_API_KEY` 时：**导入和关键词检索可用**，但查询解析、线索抽取、答案生成会返回错误码（`2001` / `2002`）。
+两条通路都不可用时：**导入和关键词检索可用**，但查询解析、线索抽取、答案生成会返回
+`2003`（未配置/网关拒绝）或 `2001`/`2002`（超时/格式异常）。
+
+> WorkBuddy 网关只支持**流式**响应，`app/providers.py` 负责把 SSE 片段拼回完整文本，
+> 上层流程仍是「一次调用拿一段字符串」。协议细节与自检方式见 `docs/WORKBUDDY.md`。
 
 ---
 
@@ -81,7 +92,28 @@ Base URL：`http://127.0.0.1:8000`，所有接口统一返回：
 { "code": 0, "message": "ok", "data": null }
 ```
 
-### 3.2 检索 / 对话
+### 3.2 大模型通路状态
+
+`GET /api/llm/status`
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "provider": "workbuddy",
+    "model": "wb-model-id",
+    "configured": true,
+    "missing": [],
+    "endpoint": "https://xxx.workbuddy.link"
+  }
+}
+```
+
+只读诊断，不返回任何密钥；`configured=false` 时 `missing` 列出还缺哪些环境变量。
+前端「系统状态」页可原样展示，便于答辩时说明当前走的是哪条模型通路。
+
+### 3.3 检索 / 对话
 
 `POST /api/search`
 
@@ -184,7 +216,7 @@ Base URL：`http://127.0.0.1:8000`，所有接口统一返回：
 
 不会调用大模型编造回答。前端直接渲染 `suggestions` 即可。
 
-### 3.3 回答追问 / 条件更正
+### 3.4 回答追问 / 条件更正
 
 `POST /api/answer_ask`
 
@@ -198,7 +230,7 @@ Base URL：`http://127.0.0.1:8000`，所有接口统一返回：
 - 改条件 = 替换，不是叠加（旧条件不会残留）。
 - 响应结构与 `/api/search` 相同（`answer` / `no_result`）。
 
-### 3.4 导入群聊 JSON
+### 3.5 导入群聊 JSON
 
 `POST /api/import`
 
@@ -253,6 +285,7 @@ Base URL：`http://127.0.0.1:8000`，所有接口统一返回：
 | `1001` | 400 | 查询内容为空，请输入你想查找的内容 | `query` / `reply` 为空 |
 | `2001` | 504 | 大模型服务响应超时，请稍后重试 | 调用超时（不重试） |
 | `2002` | 502 | 大模型返回内容格式异常，已重试仍失败 | 连续两次非 JSON |
+| `2003` | 503 | 大模型服务暂不可用，请稍后重试 | provider 未配置、网关拒绝（凭据/来源/额度/模型下线）、流式中断 |
 | `3001` | 500 | 数据库操作失败，请稍后重试 | SQLite 异常 |
 | `4001` | 400 | 内容未通过安全校验，请调整后重试 | 入参不合法（如 `session_id` 为空、导入文件不存在） |
 | `5000` | 500 | 服务内部错误，请稍后重试 | 未捕获异常 |
@@ -296,7 +329,8 @@ backend/
 │   ├── search_hybrid.py# RRF 混合检索
 │   ├── embed.py        # sentence-transformers 客户端
 │   ├── errors.py       # 错误码表
-│   ├── llm.py          # chat_json（temperature=0，超时 30s，重试 1 次）
+│   ├── llm.py          # chat_json：provider 无关的调用入口（超时/重试/JSON 解析）
+│   ├── providers.py    # 上游通路：openai 兼容接口 / WorkBuddy 云服务网关（SSE 拼装）
 │   └── prompts/        # 全部提示词（extract / parse / correct / answer）
 ├── scripts/            # 一键脚本、示例数据、离线向量构建
 ├── tests/              # pytest 用例

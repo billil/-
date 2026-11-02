@@ -1,0 +1,199 @@
+{
+  "version": "v1.0",
+  "scenario": "B",
+  "title": "追问后更正：这周志愿活动在哪 → 不是这周，是下周",
+  "description": "第一轮 B 因时间口径模糊追问一次；第二轮用户更正为下周，B 以原查询 + 更正重新解析后给出答案。",
+  "rounds": [
+    {
+      "request": {
+        "query": "这周志愿活动在哪",
+        "today": "2026-11-02",
+        "session": {
+          "session_id": "s-2001",
+          "status": "parsed",
+          "parse": {},
+          "last_query": null,
+          "updated_at": "2026-11-02T09:00:00+08:00",
+          "ask_count": 0
+        },
+        "d_context": {
+          "group_id": "g-001",
+          "allowed_msg_ids": ["m2001"],
+          "user_scope": {
+            "user_id": "u-001",
+            "role": "member",
+            "groups": ["g-001"]
+          }
+        },
+        "candidates": [],
+        "_owner": {
+          "query": "D",
+          "today": "D",
+          "session": "D",
+          "d_context": "D",
+          "candidates": "D"
+        }
+      },
+      "response": {
+        "status": "ask",
+        "parse": {
+          "keywords": ["志愿活动"],
+          "time": {
+            "type": "relative",
+            "start": "2026-11-02 00:00:00",
+            "end": "2026-11-08 23:59:59",
+            "raw": "这周"
+          },
+          "time_field": "event_time",
+          "category": "event",
+          "file_hint": null,
+          "filters": {
+            "explicit": ["category:event"],
+            "vague": []
+          },
+          "ambiguous": {
+            "field": "time",
+            "question": "这里的“这周”指 11月2日-11月8日，还是下周 11月9日-11月15日？",
+            "options": ["11月2日-11月8日（这周）", "11月9日-11月15日（下周）"]
+          }
+        },
+        "assumptions": [],
+        "question": "这里的“这周”指 11月2日-11月8日，还是下周 11月9日-11月15日？",
+        "options": ["11月2日-11月8日（这周）", "11月9日-11月15日（下周）"],
+        "_owner": {
+          "status": "B",
+          "parse": "B",
+          "assumptions": "B",
+          "question": "B",
+          "options": "B"
+        }
+      }
+    },
+    {
+      "request": {
+        "query": "不是这周，是下周",
+        "today": "2026-11-02",
+        "session": {
+          "session_id": "s-2001",
+          "status": "asked",
+          "parse": {
+            "keywords": ["志愿活动"],
+            "time": {
+              "type": "relative",
+              "start": "2026-11-02 00:00:00",
+              "end": "2026-11-08 23:59:59",
+              "raw": "这周"
+            },
+            "time_field": "event_time",
+            "category": "event",
+            "file_hint": null,
+            "filters": {
+              "explicit": ["category:event"],
+              "vague": []
+            },
+            "ambiguous": {
+              "field": "time",
+              "question": "这里的“这周”指 11月2日-11月8日，还是下周 11月9日-11月15日？",
+              "options": ["11月2日-11月8日（这周）", "11月9日-11月15日（下周）"]
+            }
+          },
+          "last_query": "这周志愿活动在哪",
+          "updated_at": "2026-11-02T09:03:00+08:00",
+          "ask_count": 1
+        },
+        "d_context": {
+          "group_id": "g-001",
+          "allowed_msg_ids": ["m2001"],
+          "user_scope": {
+            "user_id": "u-001",
+            "role": "member",
+            "groups": ["g-001"]
+          }
+        },
+        "candidates": [
+          {
+            "msg_id": "m2001",
+            "content": "下周日上午9点图书馆志愿活动，缺2人报名",
+            "sender": "青协小张",
+            "send_time": "2026-11-02 20:10:00",
+            "group_id": "g-001",
+            "category": "event",
+            "file_hint": null,
+            "score": 0.9,
+            "sources": ["kw", "vec"],
+            "version": 1
+          }
+        ],
+        "_owner": {
+          "query": "D",
+          "today": "D",
+          "session": "D",
+          "d_context": "D",
+          "candidates": "D"
+        }
+      },
+      "response": {
+        "status": "answer",
+        "parse": {
+          "keywords": ["志愿活动", "下周"],
+          "time": {
+            "type": "relative",
+            "start": "2026-11-09 00:00:00",
+            "end": "2026-11-15 23:59:59",
+            "raw": "下周"
+          },
+          "time_field": "event_time",
+          "category": "event",
+          "file_hint": null,
+          "filters": {
+            "explicit": ["category:event"],
+            "vague": []
+          },
+          "ambiguous": null
+        },
+        "assumptions": [],
+        "message": "",
+        "answer": {
+          "status": "ok",
+          "answer": "下周日上午9点在图书馆有志愿活动，缺2人报名。",
+          "events": [
+            {
+              "summary": null,
+              "time": "2026-11-15 09:00:00",
+              "time_raw": "下周日上午9点",
+              "deadline": null,
+              "location": "图书馆",
+              "participants": [],
+              "file_name": null,
+              "sources": [
+                {
+                  "msg_id": "m2001",
+                  "quote": "下周日上午9点图书馆志愿活动，缺2人报名"
+                }
+              ],
+              "msg_ids": ["m2001"],
+              "conflicts": {}
+            }
+          ],
+          "clusters": []
+        },
+        "evidence": [
+          {
+            "msg_id": "m2001",
+            "quote": "下周日上午9点图书馆志愿活动，缺2人报名",
+            "field": "time",
+            "version": 1
+          }
+        ],
+        "_owner": {
+          "status": "B",
+          "parse": "B",
+          "assumptions": "B",
+          "message": "B",
+          "answer": "B",
+          "evidence": "B"
+        }
+      }
+    }
+  ]
+}

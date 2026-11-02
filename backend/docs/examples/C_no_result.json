@@ -1,0 +1,77 @@
+{
+  "version": "v1.0",
+  "scenario": "C",
+  "title": "无结果：上周有没有人发过无人机采购表",
+  "description": "D 按群与权限检索后确实没有候选；B 不调用大模型，直接返回 no_data 与放宽建议。",
+  "rounds": [
+    {
+      "request": {
+        "query": "上周有没有人发过无人机采购表",
+        "today": "2026-11-02",
+        "session": {
+          "session_id": "s-3001",
+          "status": "parsed",
+          "parse": {},
+          "last_query": null,
+          "updated_at": "2026-11-02T09:00:00+08:00",
+          "ask_count": 0
+        },
+        "d_context": {
+          "group_id": "g-001",
+          "allowed_msg_ids": [],
+          "user_scope": {
+            "user_id": "u-001",
+            "role": "member",
+            "groups": ["g-001"]
+          }
+        },
+        "candidates": [],
+        "_owner": {
+          "query": "D",
+          "today": "D",
+          "session": "D",
+          "d_context": "D",
+          "candidates": "D"
+        }
+      },
+      "response": {
+        "status": "no_data",
+        "parse": {
+          "keywords": ["无人机", "采购表"],
+          "time": {
+            "type": "relative",
+            "start": "2026-10-26 00:00:00",
+            "end": "2026-11-01 23:59:59",
+            "raw": "上周"
+          },
+          "time_field": "send_time",
+          "category": "file",
+          "file_hint": "无人机采购表",
+          "filters": {
+            "explicit": ["category:file", "file_hint:无人机采购表"],
+            "vague": []
+          },
+          "ambiguous": null
+        },
+        "assumptions": [],
+        "answer": null,
+        "evidence": [],
+        "suggestions": [
+          "把时间范围放宽到最近一个月",
+          "只按类别搜索（活动/办事/文件）",
+          "换一个更具体的关键词"
+        ],
+        "message": "群里没有找到相关资料",
+        "_owner": {
+          "status": "B",
+          "parse": "B",
+          "assumptions": "B",
+          "answer": "B",
+          "evidence": "B",
+          "suggestions": "B",
+          "message": "B"
+        }
+      }
+    }
+  ]
+}

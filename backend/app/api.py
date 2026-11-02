@@ -34,6 +34,7 @@ from .errors import (
 from .extract import extract_leads
 from .ingest import import_messages
 from .llm import LLMFormatError
+from .providers import provider_status
 from .search_vec import probe_vector
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,15 @@ def _ok(data=None) -> dict:
 async def health() -> dict:
     """健康检查。"""
     return {"code": 0, "message": "ok", "data": None}
+
+
+@app.get("/api/llm/status")
+async def llm_status() -> dict:
+    """大模型通路状态：provider / 模型名 / 是否配置齐全 / 缺哪个环境变量。
+
+    只读诊断，不返回任何密钥，供前端「系统状态」页原样展示。
+    """
+    return _ok(provider_status())
 
 
 @app.post("/api/search")

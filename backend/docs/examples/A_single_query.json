@@ -1,0 +1,149 @@
+{
+  "version": "v1.0",
+  "scenario": "A",
+  "title": "一次问清：这周志愿活动在哪",
+  "description": "用户一次说清查询；D 完成鉴权与候选检索，B 解析、生成带引用答案并写回会话。",
+  "rounds": [
+    {
+      "request": {
+        "query": "这周志愿活动在哪",
+        "today": "2026-11-02",
+        "session": {
+          "session_id": "s-1001",
+          "status": "parsed",
+          "parse": {},
+          "last_query": null,
+          "updated_at": "2026-11-02T09:00:00+08:00",
+          "ask_count": 0
+        },
+        "d_context": {
+          "group_id": "g-001",
+          "allowed_msg_ids": ["m1001", "m1002"],
+          "user_scope": {
+            "user_id": "u-001",
+            "role": "member",
+            "groups": ["g-001"]
+          }
+        },
+        "candidates": [
+          {
+            "msg_id": "m1001",
+            "content": "本周六上午9点图书馆志愿活动，缺3人报名",
+            "sender": "青协小张",
+            "send_time": "2026-11-02 09:15:00",
+            "group_id": "g-001",
+            "category": "event",
+            "file_hint": null,
+            "score": 0.88,
+            "sources": ["kw", "vec"],
+            "version": 1
+          },
+          {
+            "msg_id": "m1002",
+            "content": "志愿活动改到周日上午9点，地点还是图书馆门口",
+            "sender": "青协小张",
+            "send_time": "2026-11-02 18:40:00",
+            "group_id": "g-001",
+            "category": "event",
+            "file_hint": null,
+            "score": 0.74,
+            "sources": ["kw"],
+            "version": 2
+          }
+        ],
+        "_owner": {
+          "query": "D",
+          "today": "D",
+          "session": "D",
+          "d_context": "D",
+          "candidates": "D"
+        }
+      },
+      "response": {
+        "status": "answer",
+        "parse": {
+          "keywords": ["志愿活动"],
+          "time": {
+            "type": "relative",
+            "start": "2026-11-02 00:00:00",
+            "end": "2026-11-08 23:59:59",
+            "raw": "这周"
+          },
+          "time_field": "event_time",
+          "category": "event",
+          "file_hint": null,
+          "filters": {
+            "explicit": ["category:event"],
+            "vague": []
+          },
+          "ambiguous": null
+        },
+        "assumptions": [],
+        "message": "",
+        "answer": {
+          "status": "ok",
+          "answer": "志愿活动原定本周六（11月7日）上午9点在图书馆，缺3人报名；后改到周日（11月8日）上午9点，地点为图书馆门口。",
+          "events": [
+            {
+              "summary": null,
+              "time": "2026-11-07 09:00:00",
+              "time_raw": "本周六上午9点",
+              "deadline": null,
+              "location": "图书馆",
+              "participants": [],
+              "file_name": null,
+              "sources": [
+                {
+                  "msg_id": "m1001",
+                  "quote": "本周六上午9点图书馆志愿活动，缺3人报名"
+                }
+              ],
+              "msg_ids": ["m1001"],
+              "conflicts": {}
+            },
+            {
+              "summary": null,
+              "time": "2026-11-08 09:00:00",
+              "time_raw": "周日上午9点",
+              "deadline": null,
+              "location": "图书馆门口",
+              "participants": [],
+              "file_name": null,
+              "sources": [
+                {
+                  "msg_id": "m1002",
+                  "quote": "志愿活动改到周日上午9点，地点还是图书馆门口"
+                }
+              ],
+              "msg_ids": ["m1002"],
+              "conflicts": {}
+            }
+          ],
+          "clusters": []
+        },
+        "evidence": [
+          {
+            "msg_id": "m1001",
+            "quote": "本周六上午9点图书馆志愿活动，缺3人报名",
+            "field": "time",
+            "version": 1
+          },
+          {
+            "msg_id": "m1002",
+            "quote": "志愿活动改到周日上午9点，地点还是图书馆门口",
+            "field": "time",
+            "version": 2
+          }
+        ],
+        "_owner": {
+          "status": "B",
+          "parse": "B",
+          "assumptions": "B",
+          "message": "B",
+          "answer": "B",
+          "evidence": "B"
+        }
+      }
+    }
+  ]
+}

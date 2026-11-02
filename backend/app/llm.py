@@ -1,39 +1,32 @@
-"""大模型调用封装（OpenAI 兼容接口）。
+"""大模型调用封装（provider 无关）。
 
 对外只暴露 chat_json(messages)：
 - temperature 固定 0，超时 30 秒（可在 config 中用 LLM_TIMEOUT 覆盖）
 - 模型输出必须能 json.loads，解析失败自动重试 1 次
 - 两次都失败抛 LLMFormatError
 
-地址/密钥/模型名在每次调用时从环境变量读取：
-LLM_BASE_URL、LLM_API_KEY、LLM_MODEL。
+走哪家上游由 `LLM_PROVIDER` 决定，实现见 app.providers：
+- `openai`（默认）：OpenAI 兼容接口，环境变量 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+- `workbuddy`：WorkBuddy 云服务免密钥大模型网关，环境变量 WB_ENDPOINT / WB_PUBLISHABLE_KEY / WB_MODEL
+
+配置缺失或网关拒绝时抛 AppError(LLM_UNAVAILABLE)，上层按 2003 返回。
 """
 
 import json
-import os
 import socket
 import urllib.error
-import urllib.request
 from typing import Any
 
-from .config import LLM_TEMPERATURE, LLM_TIMEOUT
-from .errors import AppError, LLM_TIMEOUT as LLM_TIMEOUT_CODE
+from .errors import (
+    AppError,
+    LLM_TIMEOUT as LLM_TIMEOUT_CODE,
+    LLM_UNAVAILABLE,
+)
+from .providers import ProviderUnavailable, get_provider
 
 
 class LLMFormatError(RuntimeError):
     """大模型返回内容无法解析为 JSON（已重试 1 次仍失败）。"""
-
-
-def _llm_settings() -> tuple[str, str, str]:
-    """读取 LLM 配置。每次调用时读环境变量，便于测试替换。"""
-    base_url = os.environ.get("LLM_BASE_URL", "").strip().rstrip("/")
-    api_key = os.environ.get("LLM_API_KEY", "").strip()
-    model = os.environ.get("LLM_MODEL", "").strip()
-    if not base_url or not model:
-        raise RuntimeError(
-            "大模型配置缺失：请设置环境变量 LLM_BASE_URL、LLM_API_KEY、LLM_MODEL"
-        )
-    return base_url, api_key, model
 
 
 def _strip_code_fence(text: str) -> str:
@@ -49,40 +42,16 @@ def _strip_code_fence(text: str) -> str:
 
 
 def _call_llm(messages: list[dict], timeout: float | None = None) -> str:
-    """单次调用 chat/completions，返回模型原始文本。
+    """单次调用上游模型，返回模型原始文本。
 
+    provider 的装配与协议细节都在 app.providers；这里只做错误归类，
     独立成函数便于测试中 monkeypatch（不发真实网络请求）。
     """
-    base_url, api_key, model = _llm_settings()
-    url = (
-        base_url
-        if base_url.endswith("/chat/completions")
-        else base_url + "/chat/completions"
-    )
-
-    payload = json.dumps(
-        {
-            "model": model,
-            "messages": messages,
-            "temperature": LLM_TEMPERATURE,
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
-
-    request = urllib.request.Request(
-        url,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-
-    with urllib.request.urlopen(request, timeout=timeout or LLM_TIMEOUT) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
-
-    return body["choices"][0]["message"]["content"]
+    try:
+        return get_provider().complete(messages, timeout=timeout)
+    except ProviderUnavailable as exc:
+        # 配置缺失 / 网关拒绝 / 流中断：给前端一句能看懂的中文，不暴露堆栈
+        raise AppError(LLM_UNAVAILABLE, str(exc) or None) from exc
 
 
 def chat_json(messages: list[dict]) -> Any:
