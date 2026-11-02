@@ -19,7 +19,10 @@ from .errors import AppError, EMPTY_QUERY
 from .llm import chat_json
 from .prompts.correct import CORRECT_SYSTEM_PROMPT
 from .prompts.parse import PARSE_SYSTEM_PROMPT
-from .search_hybrid import hybrid_search
+def hybrid_search(*args, **kwargs):
+    # The injected D candidate provider does not require the optional vector stack.
+    from .search_hybrid import hybrid_search as search
+    return search(*args, **kwargs)
 from .session import (
     STATUS_ASKED,
     STATUS_ANSWERED,
@@ -748,3 +751,4 @@ def revise_flow(
         limit,
         session.ask_count,
     )
+

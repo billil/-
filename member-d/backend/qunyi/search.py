@@ -21,9 +21,12 @@ class LocalSearch:
         text=row['content']+' '+meta.get('title','')
         store.db.execute('INSERT OR REPLACE INTO search_index VALUES(?,?,?,?)',
             (row['id'],row['workspace'],dump(tokenize(text)),row['revision']))
-    def search(self,store,workspace,query,conditions,limit=12,expanded=True):
+    def search(self,store,workspace,query,conditions,limit=12,expanded=True,allowed_groups=None):
         import json
         rows=store.rows('SELECT m.*,i.tokens FROM messages m JOIN search_index i ON m.id=i.message_id AND m.revision=i.revision WHERE m.workspace=? AND i.workspace=? ORDER BY m.imported_at,m.id',(workspace,workspace))
+        if allowed_groups is not None:
+            scope=set(allowed_groups)
+            rows=[row for row in rows if row['group_label'] in scope]
         before=conditions.get('sent_before');after=conditions.get('sent_after');group=conditions.get('group_label');event=conditions.get('event_key')
         rows=[r for r in rows if (not group or r['group_label']==group) and (not before or r['sent_at'] and r['sent_at']<=before) and (not after or r['sent_at'] and r['sent_at']>=after) and (not event or json.loads(r['metadata']).get('event_key')==event)]
         q=tokenize(query,expanded)

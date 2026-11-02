@@ -140,7 +140,7 @@ class Service:
         if m=='POST' and p=='/v1/query':
             result=self.query(s,b,rid,start)
             code=result.get('error',{}).get('code')
-            http=503 if code=='MODEL_NOT_CONFIGURED' else 504 if code in ('MODEL_TIMEOUT','QUERY_DEADLINE') else 502 if result['status']=='error' else 200
+            http=503 if code in ('MODEL_NOT_CONFIGURED','B_MODEL_CONFIG_MISMATCH','B_MODULE_UNAVAILABLE') else 504 if code in ('MODEL_TIMEOUT','QUERY_DEADLINE') else 502 if result['status']=='error' else 200
             return http,result
         if m=='GET' and p.startswith('/v1/sessions/'):
             sid=p.split('/')[-1];session=self.session(s,sid)
@@ -158,7 +158,7 @@ class Service:
         nowv=now()
         self.store.db.execute('''INSERT INTO groups(workspace,group_key,label,source,authorized,last_received,created,updated)
           VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace,group_key) DO UPDATE SET label=excluded.label,source=excluded.source,
-          authorized=excluded.authorized,updated=excluded.updated''',(s,key,label,source,1 if authorized else 0,None,nowv,nowv))
+          updated=excluded.updated''',(s,key,label,source,1 if authorized else 0,None,nowv,nowv))
 
     def groups(self,s):
         rows=self.store.rows('SELECT * FROM groups WHERE workspace=? ORDER BY label,group_key',(s,))
@@ -391,14 +391,25 @@ class Service:
         search_mode=b.get('search_mode','expanded')
         require(search_mode in ('keyword','expanded'),message='search_mode 不正确')
         query=conditions.get('query_text',question)
-        candidates=self.search.search(self.store,s,query,conditions,expanded=search_mode=='expanded')
+        scope=None
+        if os.environ.get('QUNYI_B_INTEGRATION')=='1':
+            scope=[r['group_key'] for r in self.store.rows('SELECT group_key FROM groups WHERE workspace=? AND authorized=1',(s,))]
+        candidates=self.search.search(self.store,s,query,conditions,expanded=search_mode=='expanded',allowed_groups=scope)
         ai={'mode':self.cfg.mode,'simulation':self.cfg.mode=='mock','attempted':False,'actual_participation':False,'calls':0,'succeeded':False,'error_code':None}
         trace=[{'tool':'search','count':len(candidates),'search':self.search.name}]
+        stats={'attempted':0,'responses':0,'max_calls':self.cfg.max_calls,'deadline':start+self.cfg.deadline,'timeout':self.cfg.timeout}
         try:
-            if self.cfg.mode=='live':
+            if os.environ.get('QUNYI_B_INTEGRATION')=='1':
+                from .b_bridge import run
+                result,stats=run(self,s,sid,question,conditions,stats)
+                ai['calls']=stats['attempted'];ai['attempted']=bool(stats['attempted']);ai['actual_participation']=bool(stats['responses']);ai['succeeded']=bool(stats['responses'])
+                trace.append({'pipeline':'b_facade','candidate_source':'d_sqlite'})
+            elif self.cfg.mode=='live':
                 result=self.live(s,question,conditions,candidates,ai,trace,start)
             else:result=self.mock(s,question,conditions,candidates)
         except (ProviderError,ApiError) as e:
+            if os.environ.get('QUNYI_B_INTEGRATION')=='1':
+                ai['calls']=stats['attempted'];ai['attempted']=bool(stats['attempted']);ai['actual_participation']=bool(stats['responses'])
             code=e.code
             ai['error_code']=code
             result={'status':'error','error':{'code':code,'message':'真实模型未完成有效处理；没有回退到模拟答案'}}
