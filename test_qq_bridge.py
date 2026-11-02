@@ -44,7 +44,10 @@ def main():
   asyncio.run(send())
   assert store.connection.execute('select count(*) from outbox').fetchone()[0]==0
   bot._forward_to_qunyi(msg,'GROUP_AT_MESSAGE_CREATE')
-  assert service.store.one('select count(*) n from messages')['n']==1
+  bot._forward_to_qunyi({'id':'attachment-1','group_openid':'group','content':'','attachments':[{'content_type':'image/png'}]},'GROUP_MESSAGE_CREATE')
+  assert service.store.one('select count(*) n from messages')['n']==2
+  assert service.store.one("select count(*) n from messages where content like '%附件消息%'")['n']==1
   server.shutdown();server.server_close();store.close()
   print('HTTP authentication, outage retry, restart recovery and deduplication: PASS')
 if __name__=='__main__': main()
+

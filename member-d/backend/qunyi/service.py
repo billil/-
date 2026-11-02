@@ -1,4 +1,4 @@
-import hashlib, json, re, sqlite3, time, os, binascii, hmac
+import hashlib, json, re, sqlite3, time, os, binascii, hmac, base64
 from datetime import datetime, timezone, timedelta
 from .store import Store,uid,now,dump
 from .search import LocalSearch
@@ -109,7 +109,9 @@ class Service:
             try:limit=int(q.get('limit','20'));offset=int(q.get('offset','0'))
             except (ValueError,TypeError):raise ApiError(400,'INVALID_INPUT','分页必须为整数')
             require(1<=limit<=100 and offset>=0,message='分页超出范围')
-            rows=self.store.rows('SELECT * FROM messages WHERE workspace=? ORDER BY imported_at,id LIMIT ? OFFSET ?',(s,limit,offset))
+            order=q.get('order','asc');require(order in ('asc','desc'),message='排序参数不正确')
+            ordering='DESC' if order=='desc' else 'ASC'
+            rows=self.store.rows(f'SELECT * FROM messages WHERE workspace=? ORDER BY imported_at {ordering},id {ordering} LIMIT ? OFFSET ?',(s,limit,offset))
             return 200,{'items':[self.public(x) for x in rows],'limit':limit,'offset':offset,'total':self.store.one('SELECT count(*) AS n FROM messages WHERE workspace=?',(s,))['n']}
         if p.startswith('/v1/messages/'):
             mid=p.split('/')[-1];row=self.message(s,mid)
@@ -186,22 +188,48 @@ class Service:
         self.store.db.execute('UPDATE subscriptions SET enabled=0,updated=? WHERE workspace=? AND group_key=?',(now(),s,key))
 
     def _subscribed_groups(self,s):
-        return {r['group_key'] for r in self.store.rows('SELECT group_key FROM subscriptions WHERE workspace=? AND enabled=1',(s,))}
+        return {r['group_key'] for r in self.store.rows('''SELECT s.group_key FROM subscriptions s JOIN groups g
+          ON g.workspace=s.workspace AND g.group_key=s.group_key
+          WHERE s.workspace=? AND s.enabled=1 AND g.authorized=1''',(s,))}
+
+    @staticmethod
+    def _notification_cursor(value):
+        if not value:return ('','')
+        require(isinstance(value,str) and len(value)<=2048,message='通知游标不正确')
+        if not value.startswith('v1.'):
+            # Previous versions returned timestamps; preserve their old exclusive meaning.
+            timestamp(value)
+            return (value,chr(0x10ffff))
+        try:
+            encoded=value[3:]; raw=base64.urlsafe_b64decode(encoded+'='*((-len(encoded))%4))
+            v=json.loads(raw.decode('utf-8'))
+            if not isinstance(v,list) or len(v)!=2 or not all(isinstance(x,str) and x for x in v):raise ValueError()
+            timestamp(v[0]);return tuple(v)
+        except (ValueError,UnicodeError,binascii.Error,TypeError,ApiError):
+            raise ApiError(400,'INVALID_INPUT','通知游标不正确') from None
+
+    @staticmethod
+    def _encode_notification_cursor(row):
+        raw=json.dumps([row['imported_at'],row['id']],ensure_ascii=False,separators=(',',':')).encode()
+        return 'v1.'+base64.urlsafe_b64encode(raw).decode().rstrip('=')
 
     def notifications(self,s,q):
         groups=self._subscribed_groups(s)
         try:limit=max(1,min(100,int(q.get('limit','50'))));after=q.get('after') or ''
         except (ValueError,TypeError):raise ApiError(400,'INVALID_INPUT','分页参数不正确')
+        after_time,after_id=self._notification_cursor(after)
         if not groups:return {'items':[],'next_cursor':after,'sync':self.sync_status(s)}
-        placeholders=','.join('?'*len(groups));args=[s,*sorted(groups),after]
+        placeholders=','.join('?'*len(groups));args=[s,*sorted(groups),after_time,after_time,after_id]
         rows=self.store.rows(f'''SELECT * FROM messages WHERE workspace=? AND group_label IN ({placeholders})
-          AND imported_at>? ORDER BY imported_at,id LIMIT ?''',(*args,limit+1))
+          AND (imported_at>? OR (imported_at=? AND id>?)) ORDER BY imported_at,id LIMIT ?''',(*args,limit+1))
         more=len(rows)>limit;rows=rows[:limit]
-        cursor=rows[-1]['imported_at'] if rows else after
+        cursor=self._encode_notification_cursor(rows[-1]) if rows else after
         return {'items':[self.public(r) for r in rows],'next_cursor':cursor,'has_more':more,'sync':self.sync_status(s)}
 
     def ack_notifications(self,s,b):
         require(set(b)<= {'group_key','cursor'} and isinstance(b.get('group_key'),str) and isinstance(b.get('cursor'),str),message='确认游标不正确')
+        self._notification_cursor(b['cursor'])
+        require(b['group_key'] in self._subscribed_groups(s),'GROUP_FORBIDDEN','群未关注或无访问资格',403)
         self.store.db.execute('UPDATE subscriptions SET cursor=?,updated=? WHERE workspace=? AND group_key=?',(b['cursor'],now(),s,b['group_key']))
         return {'group_key':b['group_key'],'cursor':b['cursor']}
 
@@ -209,7 +237,7 @@ class Service:
         r=self.store.one('''SELECT max(received) AS last_received,count(*) AS events,
           sum(status='accepted') AS accepted,sum(status='error') AS errors FROM sync_events WHERE group_key IN
           (SELECT group_key FROM groups WHERE workspace=?)''',(s,)) or {}
-        r.update({'connected':bool(self.cfg.qq_bot_secret and self.cfg.qq_workspace==s),'coverage_note':'仅代表已接收事件，不代表平台历史消息完整'})
+        r.update({'connected':None,'connection_state':'unknown','configured':bool((self.cfg.qq_bot_secret or self.cfg.qq_ingest_token) and self.cfg.qq_workspace==s),'coverage_note':'机器人在线状态未经验证；仅统计已接收事件，不代表平台历史消息完整'})
         return r
 
     def _qq_signature_ok(self,body,q):

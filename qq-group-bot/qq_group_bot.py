@@ -156,6 +156,18 @@ class MessageStore:
             "ON messages(group_openid, timestamp)"
         )
         self.connection.execute("CREATE TABLE IF NOT EXISTS outbox (message_id TEXT PRIMARY KEY, payload TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt REAL NOT NULL DEFAULT 0)")
+        self.connection.execute("CREATE TABLE IF NOT EXISTS discovered_groups (group_openid TEXT PRIMARY KEY, status TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        self.connection.commit()
+
+    def discover_group(self, group_openid: str, status: str = "pending") -> None:
+        """Record only a group identifier, never its unapproved message contents."""
+        if not group_openid or status not in {"pending", "removed"}:
+            return
+        self.connection.execute(
+            "INSERT INTO discovered_groups(group_openid,status) VALUES(?,?) "
+            "ON CONFLICT(group_openid) DO UPDATE SET status=excluded.status,updated_at=CURRENT_TIMESTAMP",
+            (group_openid, status),
+        )
         self.connection.commit()
 
     def save(self, message: dict[str, Any], event_type: str, enqueue: bool = False) -> bool:
@@ -435,11 +447,13 @@ class QQGroupBot:
             return
         if event_type == "GROUP_ADD_ROBOT":
             group_openid = str(data.get("group_openid") or "")
+            self.store.discover_group(group_openid)
             LOGGER.info("机器人已加入群：group_openid=%s", group_openid)
             if not self.settings.allows(group_openid):
                 LOGGER.info("请把该 group_openid 加入 QQ_ALLOWED_GROUPS 后重启")
             return
         if event_type == "GROUP_DEL_ROBOT":
+            self.store.discover_group(str(data.get("group_openid") or ""), "removed")
             LOGGER.info("机器人已被移出群：group_openid=%s", data.get("group_openid"))
             return
         if event_type == "GROUP_MSG_RECEIVE":
@@ -450,6 +464,7 @@ class QQGroupBot:
     def _save_group_message(self, message: dict[str, Any], event_type: str) -> None:
         group_openid = str(message.get("group_openid") or "")
         if not self.settings.allows(group_openid):
+            self.store.discover_group(group_openid)
             if group_openid not in self._warned_groups:
                 self._warned_groups.add(group_openid)
                 LOGGER.info(
@@ -482,13 +497,13 @@ class QQGroupBot:
             except Exception as exc:
                 delay = min(300, 2 ** min(attempts + 1, 8))
                 self.store.connection.execute("UPDATE outbox SET attempts=attempts+1,next_attempt=? WHERE message_id=?", (time.time()+delay, message_id))
-                LOGGER.warning("消息转发失败（%s），将在 %s 秒后重试", type(exc).__name__, delay)
+                LOGGER.warning("消息转发失败（%s），将在 %s 秒后重试", (f'HTTP {exc.code}' if isinstance(exc, urllib.error.HTTPError) else type(exc).__name__), delay)
             else:
                 self.store.connection.execute("DELETE FROM outbox WHERE message_id=?", (message_id,))
             self.store.connection.commit()
 
     def _forward_to_qunyi(self, message: dict[str, Any], event_type: str) -> None:
-        body=json.dumps({'group_key':str(message.get('group_openid') or ''),'content':str(message.get('content') or ''),'event_id':str(message.get('id') or ''),'sent_at':message.get('timestamp'),'event_type':event_type},ensure_ascii=False).encode('utf-8')
+        body=json.dumps({'group_key':str(message.get('group_openid') or ''),'content':str(message.get('content') or '').strip() or ('【附件消息：暂不支持查看附件】' if message.get('attachments') else '【非文本消息：暂不支持查看】'),'event_id':str(message.get('id') or ''),'sent_at':message.get('timestamp'),'event_type':event_type},ensure_ascii=False).encode('utf-8')
         request=urllib.request.Request(self.settings.ingest_url,data=body,headers={'Content-Type':'application/json','X-Qunyi-Ingest-Token':self.settings.ingest_token},method='POST')
         with urllib.request.urlopen(request,timeout=10) as response:
             if response.status >= 300: raise BotError(f'群忆后端 HTTP {response.status}')
