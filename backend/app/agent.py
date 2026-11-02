@@ -19,7 +19,6 @@ from .errors import AppError, EMPTY_QUERY
 from .llm import chat_json
 from .prompts.correct import CORRECT_SYSTEM_PROMPT
 from .prompts.parse import PARSE_SYSTEM_PROMPT
-from .search_hybrid import hybrid_search
 from .session import (
     STATUS_ASKED,
     STATUS_ANSWERED,
@@ -464,6 +463,7 @@ def _run_search_and_answer(
     context_lost: bool = False,
 ) -> dict:
     """检索 + 生成答案，并把 status=answered 的会话写回（回答后不删除上下文）。"""
+    from .search_hybrid import hybrid_search
     filters = build_search_filters(parse)
     search_out = hybrid_search(
         query=search_query,
