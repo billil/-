@@ -269,10 +269,15 @@ def _origin_of(url: str) -> str:
     return ""
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
 def _open(request: urllib.request.Request, timeout: float | None):
     """统一处理连接层异常：超时原样抛出（上层映射 2001），其余转成用户可读的不可用。"""
     try:
-        return urllib.request.urlopen(request, timeout=timeout or LLM_TIMEOUT)
+        return urllib.request.build_opener(_NoRedirect()).open(request, timeout=timeout or LLM_TIMEOUT)
     except urllib.error.HTTPError as exc:
         raise ProviderUnavailable(
             _http_error_message(exc), code="http_error", status=exc.code
@@ -395,3 +400,4 @@ def _accumulate_sse(resp) -> str:
     if not done:
         raise ProviderUnavailable("大模型流式响应中断，请稍后重试", code="stream_interrupted")
     return "".join(chunks)
+

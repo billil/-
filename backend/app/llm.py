@@ -13,7 +13,9 @@
 """
 
 import json
+from contextvars import ContextVar
 import socket
+import time
 import urllib.error
 from typing import Any
 
@@ -23,6 +25,8 @@ from .errors import (
     LLM_UNAVAILABLE,
 )
 from .providers import ProviderUnavailable, get_provider
+
+CALL_STATS = ContextVar('qunyi_b_call_stats', default=None)
 
 
 class LLMFormatError(RuntimeError):
@@ -48,7 +52,19 @@ def _call_llm(messages: list[dict], timeout: float | None = None) -> str:
     独立成函数便于测试中 monkeypatch（不发真实网络请求）。
     """
     try:
-        return get_provider().complete(messages, timeout=timeout)
+        stats = CALL_STATS.get()
+        if stats is not None:
+            if stats.get('max_calls') is not None and stats['attempted'] >= stats['max_calls']:
+                raise RuntimeError('B_CALL_LIMIT')
+            remaining = stats.get('deadline', float('inf')) - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('query deadline exceeded')
+            timeout = min(remaining, stats.get('timeout', remaining), timeout or remaining)
+            stats['attempted'] += 1
+        result = get_provider().complete(messages, timeout=timeout)
+        if stats is not None:
+            stats['responses'] += 1
+        return result
     except ProviderUnavailable as exc:
         # 配置缺失 / 网关拒绝 / 流中断：给前端一句能看懂的中文，不暴露堆栈
         raise AppError(LLM_UNAVAILABLE, str(exc) or None) from exc
@@ -78,3 +94,4 @@ def chat_json(messages: list[dict]) -> Any:
         f"大模型输出不是合法 JSON（已重试 1 次）：{last_error}；"
         f"原文片段={last_text[:200]!r}"
     )
+
