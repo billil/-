@@ -66,6 +66,17 @@ class BotTests(unittest.TestCase):
         bot = self.make_bot()
         self.dispatch(bot, "GROUP_MESSAGE_CREATE", sample_message(group="other-group"))
         self.assertEqual(self.store.count(), 0)
+        self.assertEqual(self.store.connection.execute("SELECT status FROM discovered_groups WHERE group_openid=?", ("other-group",)).fetchone(), ("pending",))
+
+    def test_discovery_survives_restart_and_records_removal(self):
+        bot = self.make_bot()
+        self.dispatch(bot, "GROUP_ADD_ROBOT", {"group_openid": "new-group"})
+        self.store.close()
+        self.store = MessageStore(self.db_path)
+        self.assertEqual(self.store.connection.execute("SELECT status FROM discovered_groups WHERE group_openid=?", ("new-group",)).fetchone(), ("pending",))
+        bot = self.make_bot()
+        self.dispatch(bot, "GROUP_DEL_ROBOT", {"group_openid": "new-group"})
+        self.assertEqual(self.store.connection.execute("SELECT status FROM discovered_groups WHERE group_openid=?", ("new-group",)).fetchone(), ("removed",))
 
     def test_empty_whitelist_is_discovery_mode(self):
         bot = self.make_bot(groups=frozenset())
