@@ -1,4 +1,4 @@
-import hashlib, json, re, sqlite3, time, os, binascii, hmac
+import hashlib, json, re, sqlite3, time, os, binascii, hmac, unicodedata
 from datetime import datetime, timezone, timedelta
 from .store import Store,uid,now,dump
 from .search import LocalSearch
@@ -80,11 +80,27 @@ class Service:
             return status,data
     @staticmethod
     def log_route(path):
+        if path.startswith('/v1/tags/'):return '/v1/tags/:id'
         if path.startswith('/v1/messages/'):return '/v1/messages/:id'
         if path.startswith('/v1/sessions/'):return '/v1/sessions/:id'
         if path.startswith('/v1/requests/'):return '/v1/requests/:id'
         return path if path in ('/v1/imports','/v1/messages','/api/health','/v1/coverage','/v1/query','/v1/events','/v1/index/rebuild','/v1/capabilities','/v1/groups','/v1/subscriptions','/v1/notifications','/v1/sync/status','/v1/webhooks/qq','/v1/internal/qq/messages') else '/unknown'
     def route(self,m,p,b,s,q,rid,start):
+        if p=='/v1/tags':
+            if m=='GET':return 200,self.tags_list(s)
+            if m=='POST':return 201,self.tags_create(s,b)
+        tagroute=re.fullmatch(r'/v1/tags/(tag_[0-9a-f]{32})(?:/(messages))?',p)
+        if tagroute:
+            tid,sub=tagroute.groups()
+            if sub=='messages' and m=='GET':return 200,self.tag_messages(s,tid,q)
+            if sub is None and m=='PATCH':return 200,self.tags_update(s,tid,b)
+            if sub is None and m=='DELETE':return 200,self.tags_delete(s,tid)
+        taglink=re.fullmatch(r'/v1/messages/([^/]+)/tags(?:/(tag_[0-9a-f]{32}))?',p)
+        if taglink:
+            mid,tid=taglink.groups()
+            if not tid and m=='GET':return 200,self.message_tags(s,mid)
+            if not tid and m=='POST':return 200,self.attach_tag(s,mid,b)
+            if tid and m=='DELETE':return 200,self.detach_tag(s,mid,tid)
         if m=='GET' and p=='/v1/me':
             return 200,{'user_id':s,'workspace':s,'auth_kind':'installation_token','group_access':'workspace_scoped','oauth_required_for_production':True}
         if m=='GET' and p=='/v1/capabilities':
@@ -152,6 +168,77 @@ class Service:
             require(bool(row),'NOT_FOUND','请求记录不存在',404)
             row.pop('workspace');row['metadata']=json.loads(row['metadata']);return 200,row
         raise ApiError(404,'NOT_FOUND','接口不存在')
+
+    @staticmethod
+    def tag_name(value):
+        require(isinstance(value,str),message='标签名称必须是文字')
+        name=unicodedata.normalize('NFKC',value).strip()
+        require(1<=len(name)<=40 and all(not unicodedata.category(ch).startswith('C') for ch in name),message='标签名称须为1至40个可见字符')
+        return name,name.casefold()
+
+    @staticmethod
+    def tag_color(value):
+        require(isinstance(value,str) and re.fullmatch(r'#[0-9a-fA-F]{6}',value),'INVALID_COLOR','颜色须为 #RRGGBB 格式',400)
+        return value.upper()
+
+    def tag(self,s,tid):
+        row=self.store.one('SELECT id,name,color,created,updated FROM tags WHERE workspace=? AND id=?',(s,tid))
+        require(bool(row),'NOT_FOUND','标签不存在',404);return row
+
+    def tags_list(self,s):
+        rows=self.store.rows('''SELECT t.id,t.name,t.color,t.created,t.updated,COUNT(mt.message_id) AS message_count
+          FROM tags t LEFT JOIN message_tags mt ON mt.workspace=t.workspace AND mt.tag_id=t.id
+          WHERE t.workspace=? GROUP BY t.id ORDER BY t.created,t.id''',(s,))
+        return {'items':rows,'count':len(rows),'scope':'workspace'}
+
+    def tags_create(self,s,b):
+        require(set(b)=={'name','color'},message='请提供标签名称和颜色')
+        name,key=self.tag_name(b['name']);color=self.tag_color(b['color']);tid=uid('tag');created=now()
+        require(not self.store.one('SELECT id FROM tags WHERE workspace=? AND name_key=?',(s,key)),'TAG_NAME_EXISTS','标签名称已存在',409)
+        self.store.db.execute('INSERT INTO tags VALUES(?,?,?,?,?,?,?)',(tid,s,name,key,color,created,created))
+        return self.tag(s,tid)
+
+    def tags_update(self,s,tid,b):
+        self.tag(s,tid);require(bool(b) and set(b)<={'name','color'},message='请提供要修改的名称或颜色')
+        row=self.store.one('SELECT name,name_key,color FROM tags WHERE workspace=? AND id=?',(s,tid))
+        name,key=self.tag_name(b['name']) if 'name' in b else (row['name'],row['name_key'])
+        color=self.tag_color(b['color']) if 'color' in b else row['color']
+        require(not self.store.one('SELECT id FROM tags WHERE workspace=? AND name_key=? AND id!=?',(s,key,tid)),'TAG_NAME_EXISTS','标签名称已存在',409)
+        self.store.db.execute('UPDATE tags SET name=?,name_key=?,color=?,updated=? WHERE workspace=? AND id=?',(name,key,color,now(),s,tid))
+        return self.tag(s,tid)
+
+    def tags_delete(self,s,tid):
+        self.tag(s,tid);self.store.db.execute('DELETE FROM tags WHERE workspace=? AND id=?',(s,tid))
+        return {'deleted':True,'tag_id':tid,'messages_deleted':False}
+
+    def message_tags(self,s,mid):
+        self.message(s,mid)
+        rows=self.store.rows('''SELECT t.id,t.name,t.color,t.created,t.updated FROM tags t JOIN message_tags mt
+          ON mt.tag_id=t.id AND mt.workspace=t.workspace WHERE mt.workspace=? AND mt.message_id=? ORDER BY t.created,t.id''',(s,mid))
+        return {'message_id':mid,'items':rows,'count':len(rows)}
+
+    def attach_tag(self,s,mid,b):
+        require(set(b)=={'tag_id'} and isinstance(b.get('tag_id'),str),message='请提供标签 ID')
+        self.message(s,mid);self.tag(s,b['tag_id'])
+        self.store.db.execute('INSERT OR IGNORE INTO message_tags VALUES(?,?,?,?)',(s,mid,b['tag_id'],now()))
+        return self.message_tags(s,mid)
+
+    def detach_tag(self,s,mid,tid):
+        self.message(s,mid);self.tag(s,tid)
+        self.store.db.execute('DELETE FROM message_tags WHERE workspace=? AND message_id=? AND tag_id=?',(s,mid,tid))
+        return {'message_id':mid,'tag_id':tid,'removed':True}
+
+    def tag_messages(self,s,tid,q):
+        self.tag(s,tid)
+        try:limit=int(q.get('limit','20'));offset=int(q.get('offset','0'))
+        except (ValueError,TypeError):raise ApiError(400,'INVALID_INPUT','分页必须为整数')
+        require(1<=limit<=100 and 0<=offset<=100000,message='分页超出范围')
+        args=(s,tid,s)
+        count=self.store.one('''SELECT count(*) AS n FROM message_tags mt JOIN messages m ON m.id=mt.message_id
+          WHERE mt.workspace=? AND mt.tag_id=? AND m.workspace=?''',args)['n']
+        rows=self.store.rows('''SELECT m.* FROM message_tags mt JOIN messages m ON m.id=mt.message_id
+          WHERE mt.workspace=? AND mt.tag_id=? AND m.workspace=? ORDER BY mt.created DESC,m.id DESC LIMIT ? OFFSET ?''',(*args,limit,offset))
+        return {'tag':self.tag(s,tid),'items':[self.public(r) for r in rows],'total':count,'limit':limit,'offset':offset}
 
     def _ensure_group(self,s,key,label=None,source='import',authorized=True):
         key=text(str(key),'group_key',200);label=text(label or key,'group_label',100)
