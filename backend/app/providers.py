@@ -349,6 +349,7 @@ def _accumulate_sse(resp) -> str:
     event: str | None = None
     data_lines: list[str] = []
     done = False
+    bytes_read = 0
 
     def flush() -> None:
         nonlocal event, done
@@ -379,6 +380,9 @@ def _accumulate_sse(resp) -> str:
             chunks.append(piece)
 
     for raw_line in resp:
+        bytes_read += len(raw_line)
+        if bytes_read > 1048576:
+            raise ProviderUnavailable("大模型响应过大，请稍后重试", code="response_too_large")
         line = raw_line.decode("utf-8", "replace").rstrip("\r\n")
         if line == "":
             flush()

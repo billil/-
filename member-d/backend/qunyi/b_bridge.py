@@ -1,6 +1,7 @@
 """B facade with D workspace-scoped SQLite candidates and persistent sessions."""
 import dataclasses, json, os
 from datetime import datetime
+from urllib.parse import urlsplit
 from .providers import ProviderError
 from .store import dump
 
@@ -23,14 +24,28 @@ class SessionStore:
 
 def run(service, workspace, sid, question, conditions, stats):
     cfg=service.cfg
-    if cfg.mode!='live' or not cfg.endpoint or not cfg.model or not cfg.api_key:raise ProviderError('MODEL_NOT_CONFIGURED')
-    base=os.environ.get('LLM_BASE_URL','').rstrip('/')
-    endpoint=base if base.endswith('/chat/completions') else base+'/chat/completions'
-    if os.environ.get('LLM_PROVIDER','openai').lower() not in ('openai','openai-compatible','compatible') or endpoint!=cfg.endpoint.rstrip('/') or os.environ.get('LLM_MODEL')!=cfg.model or os.environ.get('LLM_API_KEY')!=cfg.api_key:raise ProviderError('B_MODEL_CONFIG_MISMATCH')
+    if cfg.mode!='live':raise ProviderError('MODEL_NOT_CONFIGURED')
+    provider=os.environ.get('LLM_PROVIDER','openai').strip().lower()
+    if provider in ('workbuddy','wb'):
+        endpoint=os.environ.get('WB_ENDPOINT','').strip().rstrip('/')
+        model=os.environ.get('WB_MODEL','').strip() or os.environ.get('LLM_MODEL','').strip()
+        key=os.environ.get('WB_PUBLISHABLE_KEY','').strip()
+        if not endpoint or not model or not key:raise ProviderError('MODEL_NOT_CONFIGURED')
+        parsed=urlsplit(endpoint)
+        local=cfg.allow_http_loopback and parsed.scheme=='http' and parsed.hostname in ('127.0.0.1','localhost','::1')
+        if (parsed.scheme!='https' and not local) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path:
+            raise ProviderError('B_MODEL_CONFIG_MISMATCH')
+    elif provider in ('openai','openai-compatible','compatible'):
+        if not cfg.endpoint or not cfg.model or not cfg.api_key:raise ProviderError('MODEL_NOT_CONFIGURED')
+        base=os.environ.get('LLM_BASE_URL','').rstrip('/')
+        endpoint=base if base.endswith('/chat/completions') else base+'/chat/completions'
+        if endpoint!=cfg.endpoint.rstrip('/') or os.environ.get('LLM_MODEL')!=cfg.model or os.environ.get('LLM_API_KEY')!=cfg.api_key:raise ProviderError('B_MODEL_CONFIG_MISMATCH')
+    else:raise ProviderError('B_MODEL_CONFIG_MISMATCH')
     try:
         from app import facade
         from app.session import Session
         from app.llm import CALL_STATS
+        from app.errors import AppError, LLM_TIMEOUT, LLM_UNAVAILABLE
     except ImportError:raise ProviderError('B_MODULE_UNAVAILABLE') from None
     store=SessionStore(service.store.db,workspace,sid,Session)
     scope=[row['group_key'] for row in service.store.rows('SELECT group_key FROM groups WHERE workspace=? AND authorized=1',(workspace,))]
@@ -56,6 +71,8 @@ def run(service, workspace, sid, question, conditions, stats):
     marker=CALL_STATS.set(stats)
     try:result=facade.process(question,prior_dict,candidates,store,db_path=None,limit=12,group_scope=scope)
     except ProviderError:raise
+    except AppError as exc:
+        raise ProviderError('MODEL_TIMEOUT' if exc.code==LLM_TIMEOUT else 'MODEL_UNAVAILABLE' if exc.code==LLM_UNAVAILABLE else 'B_PIPELINE_ERROR') from None
     except Exception:raise ProviderError('B_PIPELINE_ERROR') from None
     finally:CALL_STATS.reset(marker)
     status=result.get('status')
