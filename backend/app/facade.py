@@ -229,7 +229,7 @@ def build_answer(
     # 答案生成内部还要从 candidates 里抽 leads 做 cluster；cluster 自身不依赖 LLM，
     # 但需要读 leads / leads_changes 表。这部分是 B 内部的实现细节，D 不需要关心。
     assumptions = _build_assumptions(parse)
-    clusters = agent.load_clusters(candidates, db_path=db_path) if candidates else []
+    clusters = agent.load_clusters(candidates, db_path=db_path) if candidates and db_path else []
     result = agent.generate_answer(
         " ".join(parse.get("keywords") or []) or "",
         candidates,
@@ -585,3 +585,4 @@ def _save(
     if result_summary is not None:
         session_obj.result_summary = result_summary
     store.save(session_obj)
+
