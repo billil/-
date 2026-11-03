@@ -19,6 +19,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version='HTTP/1.1'
     def log_message(self,*args): pass
     def reply(self,status,obj,cookie=None):
+        self.close_connection = True  # Rejected requests may have unread bodies.
         data=json.dumps(obj,ensure_ascii=False).encode()
         self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8')
         self.send_header('Cache-Control','no-store'); self.send_header('X-Content-Type-Options','nosniff')
