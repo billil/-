@@ -88,7 +88,9 @@ class Service:
         if m=='GET' and p=='/v1/me':
             return 200,{'user_id':s,'workspace':s,'auth_kind':'installation_token','group_access':'workspace_scoped','oauth_required_for_production':True}
         if m=='GET' and p=='/v1/capabilities':
-            return 200,{'mode':self.cfg.mode,'simulation':self.cfg.mode=='mock','model_configured':bool(self.cfg.endpoint and self.cfg.model and self.cfg.api_key),'search':self.search.name,'true_semantic_model':False,'workbuddy_certified':False,'max_calls':self.cfg.max_calls}
+            wb=os.environ.get('QUNYI_B_INTEGRATION')=='1' and os.environ.get('LLM_PROVIDER','').strip().lower() in ('workbuddy','wb')
+            configured=bool(os.environ.get('WB_ENDPOINT','').strip() and os.environ.get('WB_PUBLISHABLE_KEY','').strip() and (os.environ.get('WB_MODEL','').strip() or os.environ.get('LLM_MODEL','').strip())) if wb else bool(self.cfg.endpoint and self.cfg.model and self.cfg.api_key)
+            return 200,{'mode':self.cfg.mode,'simulation':self.cfg.mode=='mock','model_configured':configured,'model_provider':'workbuddy' if wb else 'openai-compatible','search':self.search.name,'true_semantic_model':False,'workbuddy_certified':False,'max_calls':self.cfg.max_calls}
         if m=='POST' and p=='/v1/imports':return 200,self.imports(s,b)
         if m=='GET' and p=='/v1/groups':return 200,self.groups(s)
         if m=='POST' and p=='/v1/subscriptions':return 200,self.subscribe(s,b)
@@ -142,7 +144,7 @@ class Service:
         if m=='POST' and p=='/v1/query':
             result=self.query(s,b,rid,start)
             code=result.get('error',{}).get('code')
-            http=503 if code in ('MODEL_NOT_CONFIGURED','B_MODEL_CONFIG_MISMATCH','B_MODULE_UNAVAILABLE') else 504 if code in ('MODEL_TIMEOUT','QUERY_DEADLINE') else 502 if result['status']=='error' else 200
+            http=503 if code in ('MODEL_NOT_CONFIGURED','B_MODEL_CONFIG_MISMATCH','B_MODULE_UNAVAILABLE','MODEL_UNAVAILABLE') else 504 if code in ('MODEL_TIMEOUT','QUERY_DEADLINE') else 502 if result['status']=='error' else 200
             return http,result
         if m=='GET' and p.startswith('/v1/sessions/'):
             sid=p.split('/')[-1];session=self.session(s,sid)
