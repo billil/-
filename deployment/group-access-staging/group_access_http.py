@@ -1,5 +1,6 @@
 """Gateway endpoints; shared reads/search are disabled unless explicitly injected."""
 import sqlite3
+import urllib.parse
 from isolated_search import AuthorizationChanged
 
 
@@ -26,7 +27,13 @@ def handle(handler, store, method, path, reader=None, query=None):
             if reader is None:
                 handler.reply(503, {'error':'群消息功能尚未启用'})
             else:
-                handler.reply(200, {'items':reader.list_messages(account), 'data_access_enabled':True})
+                params=urllib.parse.parse_qs(urllib.parse.urlsplit(handler.path).query,keep_blank_values=True)
+                if set(params)-{'group'} or any(len(v)!=1 for v in params.values()):raise ValueError('invalid query')
+                group=params.get('group',[None])[0]
+                if group is not None and group not in store.allowed_groups(account):raise PermissionError('group unavailable')
+                handler.reply(200, {'items':reader.list_messages(account,group=group), 'data_access_enabled':True})
+        elif method == 'GET' and path == '/group-access/groups':
+            handler.reply(200, {'items':store.my_groups(account)})
         elif method == 'GET' and path.startswith('/group-access/messages/'):
             if reader is None:
                 handler.reply(503, {'error':'群消息功能尚未启用'})
@@ -40,8 +47,9 @@ def handle(handler, store, method, path, reader=None, query=None):
                 handler.reply(429, {'error':'查询过于频繁'})
             else:
                 data=handler.body()
-                if not isinstance(data,dict) or set(data)!={'question'}:
+                if not isinstance(data,dict) or set(data) not in ({'question'},{'question','group_key'}):
                     raise ValueError('invalid search')
+                if 'group_key' in data and data['group_key'] not in store.allowed_groups(account):raise PermissionError('group unavailable')
                 status,result=query(account,data)
                 handler.reply(status,result)
         elif method == 'GET' and path == '/group-access/my-requests':
