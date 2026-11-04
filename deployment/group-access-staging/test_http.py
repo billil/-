@@ -8,7 +8,7 @@ from group_access_http import handle
 class FakeHandler:
     def __init__(self, account=None, data=None, origin=True, rate=True):
         self.account, self.data, self.origin, self.rate_ok = account, data, origin, rate
-        self.response = None
+        self.response = None;self.path='/'
     def session_user(self): return ('name', self.account) if self.account else None
     def body(self): return self.data
     def same_origin(self): return self.origin
