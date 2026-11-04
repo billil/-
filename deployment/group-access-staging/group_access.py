@@ -15,6 +15,9 @@ class GroupAccess:
             CREATE TABLE IF NOT EXISTS group_access_admins (
               group_key TEXT NOT NULL REFERENCES group_access_groups(group_key),
               account_id TEXT NOT NULL, PRIMARY KEY(group_key,account_id));
+            CREATE TABLE IF NOT EXISTS group_access_aliases (
+              alias TEXT PRIMARY KEY,
+              group_key TEXT NOT NULL REFERENCES group_access_groups(group_key));
             CREATE TABLE IF NOT EXISTS group_access_requests (
               id INTEGER PRIMARY KEY, group_key TEXT NOT NULL REFERENCES group_access_groups(group_key),
               account_id TEXT NOT NULL, note TEXT NOT NULL, status TEXT NOT NULL,
@@ -60,6 +63,9 @@ class GroupAccess:
             raise ValueError('invalid note')
         with self._db() as db:
             db.execute('BEGIN IMMEDIATE')
+            alias = db.execute('SELECT group_key FROM group_access_aliases WHERE alias=?',(group_key,)).fetchone()
+            if alias:
+                group_key=alias[0]
             if not db.execute('SELECT 1 FROM group_access_groups WHERE group_key=? AND enabled=1', (group_key,)).fetchone():
                 raise ValueError('group unavailable')
             if db.execute('SELECT 1 FROM group_access_members WHERE group_key=? AND account_id=? AND active=1',(group_key,account_id)).fetchone():
