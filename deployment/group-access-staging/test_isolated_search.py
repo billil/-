@@ -55,6 +55,14 @@ class IsolatedSearchTests(unittest.TestCase):
         provider=Provider('m2');status,result=self.search(provider)
         self.assertEqual(status,502,result)
         self.assertEqual(result['error']['code'],'MODEL_TOOL_DENIED')
+    def test_selected_group_is_only_context_even_if_both_are_authorized(self):
+        rid=self.acl.apply('group-b','alice');self.acl.decide(rid,'admin2',True)
+        provider=Provider()
+        status,result=search_authorized(self.reader,self.acl,'alice',self.cfg,provider,{'question':'志愿活动集合'},Service,group_key='group-a')
+        self.assertEqual(status,200,result)
+        self.assertNotIn('秘密内容',json.dumps(provider.calls,ensure_ascii=False))
+        with self.assertRaises(PermissionError):
+            search_authorized(self.reader,self.acl,'alice',self.cfg,provider,{'question':'x'},Service,group_key='unknown')
     def test_revocation_while_model_runs_blocks_response(self):
         provider=Provider(revoke=lambda:self.acl.revoke('group-a','alice','admin'))
         with self.assertRaises(AuthorizationChanged):self.search(provider)
