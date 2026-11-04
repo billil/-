@@ -31,7 +31,7 @@ class FakeProvider:
 reader=AuthorizedReader(os.environ['TEST_MSG_DB'],gateway.AUTH_DB,'bot')
 cfg=Config(state=Path(os.environ['TEST_STATE']),mode='live',tokens={'x'*20:'demo'})
 gateway.GROUP_READER=reader
-gateway.GROUP_QUERY=lambda account,data:search_authorized(reader,gateway.GROUP_ACCESS,account,cfg,FakeProvider(),data,Service)
+gateway.GROUP_QUERY=lambda account,data:search_authorized(reader,gateway.GROUP_ACCESS,account,cfg,FakeProvider(),{'question':data['question']},Service,group_key=data.get('group_key'))
 http.server.ThreadingHTTPServer(('127.0.0.1',gateway.LISTEN_PORT),gateway.Handler).serve_forever()
 '''
 
@@ -76,8 +76,11 @@ class SharedFlow(unittest.TestCase):
                 self.assertEqual(req('GET','/group-access/admin/members',cookie=owner)[2]['items'][0]['account_name'],'alice')
                 status,_,body=req('GET','/group-access/messages',cookie=alice)
                 self.assertEqual(status,200);self.assertEqual([x['id'] for x in body['items']],['m1'])
+                self.assertEqual(req('GET','/group-access/groups',cookie=alice)[2]['items'][0]['display_name'],'A')
+                self.assertEqual(req('GET','/group-access/messages?group=group-b',cookie=alice)[0],403)
                 self.assertEqual(req('GET','/group-access/messages/m2',cookie=alice)[0],404)
-                status,_,body=req('POST','/group-access/search',{'question':'志愿活动'},alice)
+                self.assertEqual(req('POST','/group-access/search',{'question':'志愿活动','group_key':'group-b'},alice)[0],403)
+                status,_,body=req('POST','/group-access/search',{'question':'志愿活动','group_key':'group-a'},alice)
                 self.assertEqual(status,200,body);self.assertEqual(body['citations'][0]['message_id'],'m1')
                 self.assertNotIn('不可见秘密',json.dumps(body,ensure_ascii=False))
                 self.assertEqual(req('POST','/group-access/admin/revoke',{'group_key':'group-a','account_id':'alice-space'},owner)[0],200)
