@@ -28,12 +28,16 @@ class GuardedProvider:
             raise AuthorizationChanged('group permissions changed during search')
 
 
-def search_authorized(reader, access, account, cfg, provider, request, service_class):
+def search_authorized(reader, access, account, cfg, provider, request, service_class, group_key=None):
     if not isinstance(request, dict) or request.get('session_id'):
         raise ValueError('only independent searches are supported')
     if cfg.mode != 'live':
         raise ValueError('live provider required')
     groups, rows = reader.snapshot(account)
+    if group_key is not None:
+        if not isinstance(group_key,str) or group_key not in groups:
+            raise PermissionError('group unavailable')
+        rows=[row for row in rows if row['group_label']==group_key]
     guarded = GuardedProvider(provider, access, account, groups)
     guarded.check()
     with tempfile.TemporaryDirectory(prefix='qunyi-authorized-') as tmp:
