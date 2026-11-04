@@ -103,6 +103,14 @@ class GroupAccess:
                 JOIN group_access_groups g ON g.group_key=m.group_key
                 WHERE m.account_id=? AND m.active=1 AND g.enabled=1''',(account_id,))}
 
+    def my_groups(self, account_id):
+        account_id = self._check(account_id)
+        with self._db() as db:
+            db.row_factory = sqlite3.Row
+            return [dict(r) for r in db.execute('''SELECT g.group_key,g.display_name FROM group_access_members m
+                JOIN group_access_groups g ON g.group_key=m.group_key
+                WHERE m.account_id=? AND m.active=1 AND g.enabled=1 ORDER BY g.display_name,g.group_key''',(account_id,))]
+
     def my_requests(self, account_id):
         account_id = self._check(account_id)
         with self._db() as db:
