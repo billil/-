@@ -1,0 +1,57 @@
+"""Prototype: search using the existing backend over an authorized temporary snapshot.
+
+Not wired to the gateway or production. A separate service instance is created
+per independent search; old sessions are deliberately unavailable.
+"""
+from dataclasses import replace
+from pathlib import Path
+import secrets
+import tempfile
+
+
+class AuthorizationChanged(Exception):
+    pass
+
+
+class GuardedProvider:
+    def __init__(self, provider, access, account, groups):
+        self.provider, self.access, self.account, self.groups = provider, access, account, groups
+
+    def complete(self, context, timeout):
+        self.check()
+        result = self.provider.complete(context, timeout)
+        self.check()
+        return result
+
+    def check(self):
+        if self.access.allowed_groups(self.account) != self.groups:
+            raise AuthorizationChanged('group permissions changed during search')
+
+
+def search_authorized(reader, access, account, cfg, provider, request, service_class):
+    if not isinstance(request, dict) or request.get('session_id'):
+        raise ValueError('only independent searches are supported')
+    if cfg.mode != 'live':
+        raise ValueError('live provider required')
+    groups, rows = reader.snapshot(account)
+    guarded = GuardedProvider(provider, access, account, groups)
+    guarded.check()
+    with tempfile.TemporaryDirectory(prefix='qunyi-authorized-') as tmp:
+        token=secrets.token_urlsafe(32)
+        isolated_cfg=replace(cfg,state=Path(tmp),tokens={token:'authorized'},qq_workspace='',qq_bot_secret='',qq_ingest_token='')
+        service=service_class(isolated_cfg,provider=guarded)
+        try:
+            for row in rows:
+                service.store.db.execute('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?)',(
+                    row['id'],'authorized','authorized-snapshot',row['group_label'],row['content'],
+                    row['sent_at'],row['imported_at'],row['metadata'],row['revision']))
+                item=service.store.one('SELECT * FROM messages WHERE id=? AND workspace=?',(row['id'],'authorized'))
+                service.search.index(service.store,item)
+            service.store.commit()
+            status, result=service.dispatch('POST','/v1/query',request,'Bearer '+token)
+            guarded.check()
+            # Snapshot storage is destroyed after the request: it cannot support session lookup.
+            result.pop('session_id',None)
+            return status,result
+        finally:
+            service.store.close()
