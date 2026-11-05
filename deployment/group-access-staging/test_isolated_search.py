@@ -31,7 +31,7 @@ class IsolatedSearchTests(unittest.TestCase):
         with sqlite3.connect(self.db) as db:
             db.execute('CREATE TABLE messages(id TEXT PRIMARY KEY,workspace TEXT,group_label TEXT,content TEXT,sent_at TEXT,imported_at TEXT,metadata TEXT,revision INTEGER)')
             db.executemany('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?)',[
-                ('m1','bot','group-a','志愿活动图书馆集合',None,'2026-01-01','{}',1),
+                ('m1','bot','group-a','志愿活动图书馆集合','2026-01-01T09:00:00+00:00','2026-01-01','{}',1),
                 ('m2','bot','group-b','志愿活动秘密内容',None,'2026-01-02','{}',1),
                 ('m3','other','group-a','志愿活动其他空间秘密',None,'2026-01-03','{}',1)])
         self.acl=GroupAccess(self.acldb);self.acl.bootstrap('group-a','A','admin');self.acl.bootstrap('group-b','B','admin2')
@@ -62,6 +62,13 @@ class IsolatedSearchTests(unittest.TestCase):
         self.assertEqual(status,200);self.assertEqual(result['status'],'uncertain')
         self.assertEqual(result['candidate_source'],'authorized_search_not_ai_answer')
         self.assertEqual([c['message_id'] for c in result['citations']],['m1'])
+    def test_candidate_metadata_is_derived_from_authorized_records(self):
+        class OptionService(Service):
+            def query(self,*args):return {'status':'clarify','options':[{'event_key':'m1','title':'活动','sent_at':'2099-01-01','group_label':'伪造群'}]}
+        status,result=search_authorized(self.reader,self.acl,'alice',self.cfg,Provider(),{'question':'志愿活动'},OptionService)
+        self.assertEqual(status,200)
+        self.assertEqual(result['options'][0]['sent_at'],'2026-01-01T09:00:00+00:00')
+        self.assertEqual(result['options'][0]['group_label'],'group-a')
     def test_selected_group_is_only_context_even_if_both_are_authorized(self):
         rid=self.acl.apply('group-b','alice');self.acl.decide(rid,'admin2',True)
         provider=Provider()
