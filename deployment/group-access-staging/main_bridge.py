@@ -38,6 +38,8 @@ def handle(handler, access, reader, query, method, path):
             names={x['group_key']:x['display_name'] for x in access.my_groups(account)}
             for item in result.get('citations',[]):
                 if item.get('group_label') in names:item['group_label']=names[item['group_label']]
+            for item in result.get('options',[]):
+                if isinstance(item,dict) and item.get('group_label') in names:item['group_label']=names[item['group_label']]
             handler.reply(status,result)
         else:
             handler.reply(405,{'error':{'message':'请求方式不支持'}})
