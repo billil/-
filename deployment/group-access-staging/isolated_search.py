@@ -7,6 +7,8 @@ from dataclasses import replace
 from pathlib import Path
 import secrets
 import tempfile
+import json
+from datetime import datetime, timezone
 
 
 class AuthorizationChanged(Exception):
@@ -63,6 +65,24 @@ def search_authorized(reader, access, account, cfg, provider, request, service_c
                     result['answer']='找到可能相关的原文，请查看并核实。'
                     result['citations']=[{'message_id':r['id'],'group_label':r['group_label'],'sent_at':r['sent_at'],'quote':r['content'][:500]} for r in candidates]
                     result['candidate_source']='authorized_search_not_ai_answer'
+            if status==200 and isinstance(result.get('options'),list):
+                for option in result['options']:
+                    if not isinstance(option,dict):continue
+                    option.pop('sent_at',None);option.pop('group_label',None)
+                    choices=[]
+                    for row in rows:
+                        meta=json.loads(row['metadata'])
+                        if meta.get('event_key',row['id'])!=option.get('event_key'):continue
+                        try:
+                            date=datetime.fromisoformat((row.get('sent_at') or '').replace('Z','+00:00'))
+                            if date.tzinfo is None:date=date.replace(tzinfo=timezone.utc)
+                            stamp=date.timestamp()
+                        except (ValueError,TypeError,OverflowError,OSError):stamp=float('-inf')
+                        choices.append((stamp,row))
+                    if choices:
+                        latest=max(choices,key=lambda x:x[0])[1]
+                        option['sent_at']=latest.get('sent_at')
+                        option['group_label']=latest.get('group_label')
             guarded.check()
             # Snapshot storage is destroyed after the request: it cannot support session lookup.
             result.pop('session_id',None)
