@@ -55,6 +55,13 @@ class IsolatedSearchTests(unittest.TestCase):
         provider=Provider('m2');status,result=self.search(provider)
         self.assertEqual(status,502,result)
         self.assertEqual(result['error']['code'],'MODEL_TOOL_DENIED')
+    def test_uncertain_model_keeps_authorized_original_as_candidate(self):
+        class Uncertain:
+            def complete(self,context,timeout):return {'action':'finish','status':'uncertain','fields':[]}
+        status,result=self.search(Uncertain())
+        self.assertEqual(status,200);self.assertEqual(result['status'],'uncertain')
+        self.assertEqual(result['candidate_source'],'authorized_search_not_ai_answer')
+        self.assertEqual([c['message_id'] for c in result['citations']],['m1'])
     def test_selected_group_is_only_context_even_if_both_are_authorized(self):
         rid=self.acl.apply('group-b','alice');self.acl.decide(rid,'admin2',True)
         provider=Provider()
