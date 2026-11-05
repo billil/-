@@ -16,9 +16,8 @@ def handle(handler, access, reader, query, method, path):
         if method=='GET' and path=='/api/v1/messages':
             params=urllib.parse.parse_qs(urllib.parse.urlsplit(handler.path).query,keep_blank_values=True)
             if set(params)-{'limit','offset','order'} or any(len(x)!=1 for x in params.values()):raise ValueError('invalid parameters')
-            limit=int(params.get('limit',['20'])[0]);offset=int(params.get('offset',['0'])[0]);order=params.get('order',['desc'])[0]
-            if order!='desc':raise ValueError('unsupported order')
-            items,total=reader.combined(account,limit,offset)
+            limit=int(params.get('limit',['20'])[0]);offset=int(params.get('offset',['0'])[0]);order=params.get('order',['asc'])[0]
+            items,total=reader.combined(account,limit,offset,order=order)
             handler.reply(200,{'items':items,'limit':limit,'offset':offset,'total':total})
         elif method=='GET' and path.startswith('/api/v1/messages/'):
             items,_=reader.combined(account,1,0,path.rsplit('/',1)[-1])
