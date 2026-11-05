@@ -1,0 +1,8 @@
+--- a/qq_group_bot.py
++++ b/qq_group_bot.py
+@@ GROUP_ADD_ROBOT 处理分支
+         if event_type == "GROUP_ADD_ROBOT":
++            operator_value = data.get("op_member_openid")
++            operator_available = isinstance(operator_value, str) and bool(operator_value.strip()) and len(operator_value) <= 256
++            LOGGER.info("群认领能力检查：入群事件包含操作人标识=%s；尚不能授予管理员权限", operator_available)
+             group_openid = str(data.get("group_openid") or "")
