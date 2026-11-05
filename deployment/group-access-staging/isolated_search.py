@@ -54,6 +54,16 @@ def search_authorized(reader, access, account, cfg, provider, request, service_c
             service.store.commit()
             status, result=service.dispatch('POST','/v1/query',request,'Bearer '+token)
             guarded.check()
+            if status==200 and result.get('status') in ('uncertain','not_found') and not result.get('citations'):
+                # Model uncertainty must not hide matching, authorized source records.
+                # These are explicitly search candidates, not AI-verified answers.
+                candidates=service.search.search(service.store,'authorized',request['question'],request.get('condition_updates',{}),limit=5)
+                if candidates:
+                    result['status']='uncertain'
+                    result['answer']='找到可能相关的原文，请查看并核实。'
+                    result['citations']=[{'message_id':r['id'],'group_label':r['group_label'],'sent_at':r['sent_at'],'quote':r['content'][:500]} for r in candidates]
+                    result['candidate_source']='authorized_search_not_ai_answer'
+            guarded.check()
             # Snapshot storage is destroyed after the request: it cannot support session lookup.
             result.pop('session_id',None)
             return status,result
