@@ -1,0 +1,12 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const context={window:{}};vm.runInNewContext(fs.readFileSync(__dirname+'/search_result_renderer.js','utf8'),context);
+const {sort,render,renderOptions}=context.window.QunyiSearchResults;
+const rows=[{message_id:'old',sent_at:'2025-01-01T00:00:00Z',quote:'旧消息',group_label:'旧群'}, {message_id:'unknown',sent_at:null,quote:'无时间',group_label:'未知群'}, {message_id:'new',sent_at:'2026-01-01T00:00:00Z',quote:'新消息<script>',group_label:'<新群>'}];
+assert.deepStrictEqual(Array.from(sort(rows),x=>x.message_id),['new','old','unknown']);
+const html=render(rows,[{message_id:'new',name:'事项',value:'参加'}]);
+assert(html.indexOf('新消息')<html.indexOf('旧消息'));assert(html.indexOf('旧消息')<html.indexOf('无时间'));
+assert(html.includes('<details class="search-source"><summary>查看来源群</summary>'));assert(!html.includes('<details open'));
+assert(html.includes('&lt;新群&gt;'));assert(!html.includes('<script>'));assert(html.includes('data-citation="new"'));
+const options=renderOptions([{event_key:'old',title:'旧事项',sent_at:'2024-01-01'}, {event_key:'new',title:'新事项',sent_at:'2026-01-01'}]);
+assert(options.indexOf('新事项')<options.indexOf('旧事项'));assert(options.includes('data-option="new"'));assert(options.includes('<details class="search-source">'));
+console.log('search renderer ordering, unknown time, collapsed source and escaping passed');

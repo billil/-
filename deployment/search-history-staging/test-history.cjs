@@ -1,0 +1,6 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const s=fs.readFileSync(require('path').join(__dirname,'fixtures','search-app.js'),'utf8');
+const start=s.indexOf("const SEARCH_HISTORY_KEY="); const end=s.indexOf('function render(){',start);
+const store=new Map();const list={innerHTML:'',querySelectorAll:()=>[]};const clear={};const context={workspaceKey:'alice',localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},view:{querySelector:s=>s==='#search-history-list'?list:s==='#clear-search-history'?clear:null},esc:s=>String(s).replace(/</g,'&lt;'),Date,search:()=>{}};vm.createContext(context);vm.runInContext(s.slice(start,end),context);
+vm.runInContext("rememberSearch('first');rememberSearch('<second>');rememberSearch('first')",context);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(vm.runInContext('readSearchHistory()',context))).map(x=>x.q),['first','<second>']);assert(list.innerHTML.includes('&lt;second>'));context.workspaceKey='bob';assert.equal(vm.runInContext('readSearchHistory().length',context),0);context.workspaceKey='alice';clear.onclick();assert.equal(vm.runInContext('readSearchHistory().length',context),0);console.log('History order, escaping, account isolation, and clear: PASS');
