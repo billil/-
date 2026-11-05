@@ -1,6 +1,7 @@
 """Trusted operator only; do not expose this module as a public endpoint."""
 import argparse
 import sqlite3
+import time
 from pathlib import Path
 from group_access import GroupAccess
 
@@ -29,6 +30,8 @@ def provision(account_db, message_db, bot_workspace, group_key, alias, name, adm
         db.execute('INSERT INTO group_access_groups VALUES(?,?,1)',(group_key,name))
         db.execute('INSERT INTO group_access_admins VALUES(?,?)',(group_key,row[0]))
         db.execute('INSERT INTO group_access_aliases VALUES(?,?)',(alias,group_key))
+        # A verified group administrator needs access to the same group they review.
+        db.execute('INSERT INTO group_access_members VALUES(?,?,1,?,?)',(group_key,row[0],row[0],int(time.time())))
 
 
 if __name__=='__main__':
