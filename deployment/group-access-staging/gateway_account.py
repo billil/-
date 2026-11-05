@@ -6,6 +6,7 @@ from collections import defaultdict, deque
 from account_store import AccountStore
 from group_access import GroupAccess
 from group_access_http import handle as group_access_handle
+from main_bridge import handle as main_bridge_handle
 
 AUTH_DB = os.environ.get('QUNYI_ACCOUNT_DB','/var/lib/qunyi-demo/accounts.sqlite3')
 ACCESS_FILE = os.environ.get('QUNYI_ACCESS_FILE','/var/lib/qunyi-demo/access-token')
@@ -21,6 +22,7 @@ GROUP_ACCESS = GroupAccess(AUTH_DB)
 # and an isolated live search callback after separately validating deployment.
 GROUP_READER = None
 GROUP_QUERY = None
+MAIN_QUERY = None
 os.chmod(AUTH_DB, 0o600)
 RATE = defaultdict(deque)
 LOCK = threading.Lock()
@@ -94,6 +96,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(403,{'error':'forbidden'});return
         if self.group_ui(p):return
         if group_access_handle(self,GROUP_ACCESS,m,p,GROUP_READER,GROUP_QUERY):return
+        if GROUP_READER and MAIN_QUERY and main_bridge_handle(self,GROUP_ACCESS,GROUP_READER,MAIN_QUERY,m,p):return
         if p=='/auth/session' and m=='GET':
             user=STORE.lookup(self.session())
             self.reply(200,{'authenticated':bool(user),'username':user[0] if user else None,'setup_required':not STORE.configured()});return
