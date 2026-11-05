@@ -18,7 +18,8 @@ class ProvisionTests(unittest.TestCase):
                 db.executemany('INSERT INTO groups VALUES(?,?,?,?)',[('bot','opaque1','qq_websocket',1),('bot','fake','manual',1)])
             with self.assertRaises(ValueError):provision(a,m,'bot','fake','123456','群','owner')
             provision(a,m,'bot','opaque1','123456','测试群','owner')
-            acl=GroupAccess(a);rid=acl.apply('123456','student');acl.decide(rid,'space-owner',True)
+            acl=GroupAccess(a);self.assertEqual(acl.allowed_groups('space-owner'),{'opaque1'})
+            rid=acl.apply('123456','student');acl.decide(rid,'space-owner',True)
             self.assertEqual(acl.allowed_groups('student'),{'opaque1'})
             with self.assertRaises(ValueError):provision(a,m,'bot','opaque1','654321','群','owner')
 
