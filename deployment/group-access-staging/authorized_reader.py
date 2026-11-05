@@ -44,9 +44,9 @@ class AuthorizedReader:
         rows=self._read(account,message_id=message_id,limit=1)
         return rows[0] if rows else None
 
-    def combined(self, account, limit=20, offset=0, message_id=None):
+    def combined(self, account, limit=20, offset=0, message_id=None, order='desc'):
         """Own records plus explicitly granted bot groups, filtered in SQL."""
-        if not isinstance(account,str) or not account or type(limit) is not int or not 1<=limit<=100 or type(offset) is not int or offset<0:
+        if not isinstance(account,str) or not account or type(limit) is not int or not 1<=limit<=100 or type(offset) is not int or offset<0 or order not in ('asc','desc'):
             raise ValueError('invalid pagination')
         db=sqlite3.connect(Path(self.messages_path).as_uri()+'?mode=ro',uri=True)
         try:
@@ -60,10 +60,11 @@ class AuthorizedReader:
                 if not isinstance(message_id,str) or not message_id:raise ValueError('invalid message')
                 where+=' AND m.id=?';args.append(message_id)
             total=db.execute('SELECT count(*) FROM main.messages m WHERE '+where,args).fetchone()[0]
+            ordering='ASC' if order=='asc' else 'DESC'
             rows=db.execute('''SELECT m.id,m.batch,m.group_label,m.content,m.sent_at,m.imported_at,m.metadata,m.revision,
                 (SELECT g.display_name FROM acl.group_access_members a JOIN acl.group_access_groups g ON g.group_key=a.group_key
                  WHERE a.account_id=? AND a.group_key=m.group_label AND a.active=1 AND g.enabled=1 AND m.workspace=? LIMIT 1) AS display_name
-                FROM main.messages m WHERE '''+where+' ORDER BY m.imported_at DESC,m.id DESC LIMIT ? OFFSET ?',
+                FROM main.messages m WHERE '''+where+f' ORDER BY m.imported_at {ordering},m.id {ordering} LIMIT ? OFFSET ?',
                 [account,self.bot_workspace,*args,limit,offset]).fetchall()
             output=[]
             for row in rows:
