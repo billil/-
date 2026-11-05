@@ -47,9 +47,10 @@ def handle(handler, store, method, path, reader=None, query=None):
                 handler.reply(429, {'error':'查询过于频繁'})
             else:
                 data=handler.body()
-                if not isinstance(data,dict) or set(data) not in ({'question'},{'question','group_key'}):
+                if not isinstance(data,dict) or set(data)-{'question','group_key','event_key'} or 'question' not in data:
                     raise ValueError('invalid search')
                 if 'group_key' in data and data['group_key'] not in store.allowed_groups(account):raise PermissionError('group unavailable')
+                if 'event_key' in data and (not isinstance(data['event_key'],str) or not data['event_key'] or len(data['event_key'])>1000):raise ValueError('invalid event')
                 status,result=query(account,data)
                 handler.reply(status,result)
         elif method == 'GET' and path == '/group-access/my-requests':
