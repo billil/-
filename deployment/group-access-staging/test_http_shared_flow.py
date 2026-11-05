@@ -31,7 +31,7 @@ class FakeProvider:
 reader=AuthorizedReader(os.environ['TEST_MSG_DB'],gateway.AUTH_DB,'bot')
 cfg=Config(state=Path(os.environ['TEST_STATE']),mode='live',tokens={'x'*20:'demo'})
 gateway.GROUP_READER=reader
-gateway.GROUP_QUERY=lambda account,data:search_authorized(reader,gateway.GROUP_ACCESS,account,cfg,FakeProvider(),{'question':data['question']},Service,group_key=data.get('group_key'))
+gateway.GROUP_QUERY=lambda account,data:search_authorized(reader,gateway.GROUP_ACCESS,account,cfg,FakeProvider(),dict({'question':data['question']},**({'condition_updates':{'event_key':data['event_key']}} if data.get('event_key') else {})),Service,group_key=data.get('group_key'))
 gateway.MAIN_QUERY=lambda account,data:search_authorized(reader,gateway.GROUP_ACCESS,account,cfg,FakeProvider(),data,Service)
 http.server.ThreadingHTTPServer(('127.0.0.1',gateway.LISTEN_PORT),gateway.Handler).serve_forever()
 '''
