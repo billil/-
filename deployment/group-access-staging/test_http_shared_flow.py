@@ -32,6 +32,7 @@ reader=AuthorizedReader(os.environ['TEST_MSG_DB'],gateway.AUTH_DB,'bot')
 cfg=Config(state=Path(os.environ['TEST_STATE']),mode='live',tokens={'x'*20:'demo'})
 gateway.GROUP_READER=reader
 gateway.GROUP_QUERY=lambda account,data:search_authorized(reader,gateway.GROUP_ACCESS,account,cfg,FakeProvider(),{'question':data['question']},Service,group_key=data.get('group_key'))
+gateway.MAIN_QUERY=lambda account,data:search_authorized(reader,gateway.GROUP_ACCESS,account,cfg,FakeProvider(),data,Service)
 http.server.ThreadingHTTPServer(('127.0.0.1',gateway.LISTEN_PORT),gateway.Handler).serve_forever()
 '''
 
@@ -45,10 +46,11 @@ class SharedFlow(unittest.TestCase):
             acc.create_account('alice','alice-password-test','alice-space');acc.create_account('bobby','bobby-password-test','bob-space')
             acl=GroupAccess(p/'accounts');acl.bootstrap('group-a','A','owner-space');acl.bootstrap('group-b','B','owner-space')
             with sqlite3.connect(p/'messages') as db:
-                db.execute('CREATE TABLE messages(id TEXT PRIMARY KEY,workspace TEXT,group_label TEXT,content TEXT,sent_at TEXT,imported_at TEXT,metadata TEXT,revision INTEGER)')
-                db.executemany('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?)',[
-                    ('m1','bot','group-a','志愿活动图书馆集合',None,'2026-01-01','{}',1),
-                    ('m2','bot','group-b','志愿活动不可见秘密',None,'2026-01-02','{}',1)])
+                db.execute('CREATE TABLE messages(id TEXT PRIMARY KEY,workspace TEXT,batch TEXT,group_label TEXT,content TEXT,sent_at TEXT,imported_at TEXT,metadata TEXT,revision INTEGER)')
+                db.executemany('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?)',[
+                    ('m1','bot','b','group-a','志愿活动图书馆集合',None,'2026-01-01','{}',1),
+                    ('m2','bot','b','group-b','志愿活动不可见秘密',None,'2026-01-02','{}',1),
+                    ('m3','alice-space','b','个人群','私人课程提醒',None,'2026-01-03','{}',1)])
             sk=socket.socket();sk.bind(('127.0.0.1',0));port=sk.getsockname()[1];sk.close()
             env=dict(os.environ,QUNYI_ACCESS_FILE=str(p/'access'),QUNYI_CREDENTIAL_FILE=str(p/'creds'),QUNYI_ACCOUNT_DB=str(p/'accounts'),QUNYI_GATEWAY_PORT=str(port),TEST_MSG_DB=str(p/'messages'),TEST_STATE=str(p/'state'),PYTHONPATH=os.pathsep.join([str(root),str(root/'test_backend_fixture')]))
             env.pop('QUNYI_B_INTEGRATION',None)
@@ -74,6 +76,13 @@ class SharedFlow(unittest.TestCase):
                 self.assertEqual(req('POST','/group-access/admin/decision',{'request_id':rid,'approve':True},bob)[0],403)
                 self.assertEqual(req('POST','/group-access/admin/decision',{'request_id':rid,'approve':True},owner)[0],200)
                 self.assertEqual(req('GET','/group-access/admin/members',cookie=owner)[2]['items'][0]['account_name'],'alice')
+                status,_,main=req('GET','/api/v1/messages?limit=100&offset=0&order=desc',cookie=alice)
+                self.assertEqual(status,200);self.assertEqual({x['id'] for x in main['items']},{'m1','m3'});self.assertNotIn('不可见秘密',json.dumps(main,ensure_ascii=False))
+                self.assertEqual(req('GET','/api/v1/messages/m1',cookie=alice)[0],200)
+                self.assertEqual(req('GET','/api/v1/messages/m2',cookie=alice)[0],404)
+                self.assertEqual(set(req('GET','/api/v1/coverage',cookie=alice)[2]['groups']),{'A','个人群'})
+                status,_,main=req('POST','/api/v1/query',{'question':'志愿活动'},alice)
+                self.assertEqual(status,200,main);self.assertEqual(main['citations'][0]['message_id'],'m1')
                 status,_,body=req('GET','/group-access/messages',cookie=alice)
                 self.assertEqual(status,200);self.assertEqual([x['id'] for x in body['items']],['m1'])
                 self.assertEqual(req('GET','/group-access/groups',cookie=alice)[2]['items'][0]['display_name'],'A')
